@@ -15,8 +15,8 @@ function createRouteHandlerClient(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
+            cookiesToSet.forEach(({ name, value }) => {
+              cookieStore.set(name, value);
             });
           } catch (error) {
             // Route handlers can't set cookies on the response this way

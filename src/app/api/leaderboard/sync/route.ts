@@ -11,8 +11,8 @@ function createRouteHandlerClient(request: NextRequest) {
         getAll() { return cookieStore.getAll(); },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
+            cookiesToSet.forEach(({ name, value }) => {
+              cookieStore.set(name, value);
             });
           } catch (error) {}
         },
@@ -278,9 +278,9 @@ export async function POST(request: NextRequest) {
             if (d === checkDate) {
               streak++;
               // Move to the previous day
-              const prev = new Date(checkDate);
-              prev.setDate(prev.getDate() - 1);
-              checkDate = prev.toISOString().split('T')[0];
+              const prevDate: Date = new Date(checkDate);
+              prevDate.setDate(prevDate.getDate() - 1);
+              checkDate = prevDate.toISOString().split('T')[0];
             } else if (d < checkDate!) {
               break; // Gap found
             }
