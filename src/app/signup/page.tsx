@@ -29,19 +29,26 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
 
+    const emailTrimmed = formData.email.trim().toLowerCase();
+    if (!emailTrimmed.endsWith('@nitkkr.ac.in')) {
+      setError('Only college email IDs ending with @nitkkr.ac.in are allowed to register.');
+      setLoading(false);
+      return;
+    }
+
     const { data, error: authError } = await supabase.auth.signUp({
-      email: formData.email,
+      email: emailTrimmed,
       password: formData.password,
       options: {
         data: {
           role: 'user', // Default role
-          full_name: formData.full_name,
+          full_name: formData.full_name.trim(),
           year: formData.year,
           branch: formData.branch,
-          contact_number: formData.contact_number,
-          roll_number: formData.roll_number,
-          cf_handle: formData.cf_handle,
-          lc_handle: formData.lc_handle,
+          contact_number: formData.contact_number.trim(),
+          roll_number: formData.roll_number.trim(),
+          cf_handle: formData.cf_handle.trim(),
+          lc_handle: formData.lc_handle.trim(),
         },
       },
     });
@@ -83,8 +90,17 @@ export default function SignupPage() {
                 <input name="full_name" type="text" onChange={handleChange} required minLength={2} className="input-field" placeholder="John Doe" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Email *</label>
-                <input name="email" type="email" onChange={handleChange} required className="input-field" placeholder="john@example.com" />
+                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">College Email (@nitkkr.ac.in) *</label>
+                <input 
+                  name="email" 
+                  type="email" 
+                  onChange={handleChange} 
+                  required 
+                  pattern=".+@nitkkr\.ac\.in$"
+                  title="Must be an official @nitkkr.ac.in email address"
+                  className="input-field" 
+                  placeholder="yourname@nitkkr.ac.in" 
+                />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Password *</label>

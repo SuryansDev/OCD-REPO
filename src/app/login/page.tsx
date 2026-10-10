@@ -19,8 +19,15 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
+    const emailTrimmed = email.trim().toLowerCase();
+    if (!emailTrimmed.endsWith('@nitkkr.ac.in')) {
+      setError('Only college email IDs ending with @nitkkr.ac.in are allowed to sign in.');
+      setLoading(false);
+      return;
+    }
+
     const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
+      email: emailTrimmed,
       password,
     });
 
@@ -94,16 +101,18 @@ export default function LoginPage() {
             {/* Email */}
             <div className="space-y-1.5">
               <label htmlFor="email" className="text-xs font-semibold text-surface-800 uppercase tracking-wider">
-                Email
+                College Email (@nitkkr.ac.in)
               </label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-300" />
                 <input
                   id="email"
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder="yourname@nitkkr.ac.in"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  pattern=".+@nitkkr\.ac\.in$"
+                  title="Must be an official @nitkkr.ac.in email address"
                   className="input-field pl-10"
                   required
                 />
