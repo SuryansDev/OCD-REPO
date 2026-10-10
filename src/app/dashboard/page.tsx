@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import PlatformBadge from '@/components/PlatformBadge';
 import Confetti from '@/components/Confetti';
@@ -766,7 +767,13 @@ export default function Dashboard() {
                         <span className="text-xs font-semibold text-surface-500">Year {myEntry.user?.year === 'Alumni' ? '🎓' : myEntry.user?.year}</span>
                       </div>
                       <p className="font-bold text-surface-900 text-sm truncate">
-                        {myEntry.user?.full_name}
+                        <Link 
+                          href={`/profile?id=${myEntry.user_id}`}
+                          className="hover:text-brand-600 hover:underline transition-colors cursor-pointer"
+                          title="View Profile"
+                        >
+                          {myEntry.user?.full_name}
+                        </Link>
                       </p>
                     </div>
                   </div>
@@ -927,9 +934,15 @@ export default function Dashboard() {
                                 )}
                               </td>
                               <td className="py-2.5 px-3 font-medium text-surface-900 truncate max-w-[140px]">
-                                {entry.user?.full_name}
+                                <Link
+                                  href={`/profile?id=${entry.user_id}`}
+                                  className="hover:text-brand-600 hover:underline transition-colors inline-block max-w-[110px] truncate align-middle cursor-pointer"
+                                  title={`View ${entry.user?.full_name}'s profile`}
+                                >
+                                  {entry.user?.full_name}
+                                </Link>
                                 {isMe && (
-                                  <span className="ml-1.5 text-[9px] font-bold bg-brand-100 text-brand-700 px-1 py-0.2 rounded">YOU</span>
+                                  <span className="ml-1.5 text-[9px] font-bold bg-brand-100 text-brand-700 px-1 py-0.2 rounded align-middle">YOU</span>
                                 )}
                               </td>
                               <td className="py-2.5 px-2 text-center text-xs text-surface-500">
