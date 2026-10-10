@@ -326,13 +326,17 @@ export default function Dashboard() {
     return sorted;
   }, [leaderboardData, leaderboardTab, latestContests]);
 
-  const LEADERBOARD_PER_PAGE = 10;
+  const LEADERBOARD_PER_PAGE = 5;
   const totalLeaderboardPages = Math.max(1, Math.ceil(sortedLeaderboard.length / LEADERBOARD_PER_PAGE));
   const safeLeaderboardPage = Math.min(Math.max(1, leaderboardPage), totalLeaderboardPages);
   const paginatedLeaderboard = sortedLeaderboard.slice(
     (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE,
     safeLeaderboardPage * LEADERBOARD_PER_PAGE
   );
+
+  const myRankIndex = sortedLeaderboard.findIndex((entry) => entry.user_id === profile?.id);
+  const myEntry = myRankIndex !== -1 ? sortedLeaderboard[myRankIndex] : null;
+  const myRank = myRankIndex !== -1 ? myRankIndex + 1 : null;
 
   const targetLCName = latestContests.lc?.title || (
     leaderboardData
@@ -689,286 +693,408 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* RIGHT: LEADERBOARD */}
-          <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.2s' }}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600 shadow-sm shadow-amber-500/10">
-                  <Trophy className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-surface-900">Leaderboard</h2>
-                  <p className="text-xs text-surface-400 mt-0.5">
-                    {sortedLeaderboard.length} participants ranked
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Leaderboard Tabs */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none mb-3">
-              {([
-                { key: 'streak', label: '🔥 Streak', icon: Flame },
-                { key: 'lc_rating', label: 'LC Rating', icon: BarChart3 },
-                { key: 'cf_rating', label: 'CF Rating', icon: BarChart3 },
-                { key: 'total_solved', label: 'Total Solved', icon: Award },
-                { key: 'lc_contest', label: 'LC Contest', icon: Trophy },
-                { key: 'cf_contest', label: 'CF Contest', icon: Trophy },
-              ] as const).map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => handleTabChange(tab.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                    leaderboardTab === tab.key
-                      ? 'bg-brand-600 text-white shadow-md shadow-brand-500/30'
-                      : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Contest Info Banner (when on LC Contest or CF Contest tabs) */}
-            {leaderboardTab === 'lc_contest' && (
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-xl p-3 mb-3 flex items-center justify-between gap-2 shadow-sm text-xs">
-                <div className="min-w-0">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded">
-                    LeetCode Contest
-                  </span>
-                  <h4 className="font-bold text-surface-900 truncate mt-1">{targetLCName}</h4>
-                </div>
-                <div className="bg-white/90 border border-amber-200/60 rounded-lg px-2.5 py-1 text-right shrink-0">
-                  <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
-                  <div className="text-sm font-black text-amber-600">{lcParticipantsCount} members</div>
+          {/* RIGHT COLUMN: LEADERBOARD + MY COHORT */}
+          <div className="space-y-6">
+            {/* LEADERBOARD CARD */}
+            <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.2s' }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600 shadow-sm shadow-amber-500/10">
+                    <Trophy className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-surface-900">Leaderboard</h2>
+                    <p className="text-xs text-surface-400 mt-0.5">
+                      {sortedLeaderboard.length} participants ranked
+                    </p>
+                  </div>
                 </div>
               </div>
-            )}
 
-            {leaderboardTab === 'cf_contest' && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl p-3 mb-3 flex items-center justify-between gap-2 shadow-sm text-xs">
-                <div className="min-w-0">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded">
-                    Codeforces Contest
-                  </span>
-                  <h4 className="font-bold text-surface-900 truncate mt-1">{targetCFName}</h4>
-                </div>
-                <div className="bg-white/90 border border-blue-200/60 rounded-lg px-2.5 py-1 text-right shrink-0">
-                  <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
-                  <div className="text-sm font-black text-blue-600">{cfParticipantsCount} members</div>
-                </div>
+              {/* Leaderboard Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none mb-3">
+                {([
+                  { key: 'streak', label: '🔥 Streak', icon: Flame },
+                  { key: 'lc_rating', label: 'LC Rating', icon: BarChart3 },
+                  { key: 'cf_rating', label: 'CF Rating', icon: BarChart3 },
+                  { key: 'total_solved', label: 'Total Solved', icon: Award },
+                  { key: 'lc_contest', label: 'LC Contest', icon: Trophy },
+                  { key: 'cf_contest', label: 'CF Contest', icon: Trophy },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => handleTabChange(tab.key)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                      leaderboardTab === tab.key
+                        ? 'bg-brand-600 text-white shadow-md shadow-brand-500/30'
+                        : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
-            )}
 
-            {/* Leaderboard Table with 10 participants at a time */}
-            <div className="border border-surface-200 rounded-xl overflow-hidden bg-white">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-surface-100/80 text-surface-600 font-semibold uppercase text-[11px] tracking-wider border-b border-surface-200">
-                    <tr>
-                      <th className="py-2.5 px-3 w-10 text-center">#</th>
-                      <th className="py-2.5 px-3">Name</th>
-                      <th className="py-2.5 px-2 w-12 text-center">Year</th>
+              {/* PINNED USER STANDING CARD (Always at top so you never have to find your rank) */}
+              {myEntry ? (
+                <div className="bg-gradient-to-r from-brand-50 via-indigo-50/70 to-purple-50 border border-brand-200/90 rounded-2xl p-3.5 mb-3 shadow-xs flex items-center justify-between gap-3 animate-fade-in">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center font-black text-sm shadow-md shadow-brand-500/25 shrink-0">
+                      {myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : `#${myRank}`}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-brand-600 text-white px-1.5 py-0.5 rounded-md">
+                          YOUR RANKING
+                        </span>
+                        <span className="text-xs font-semibold text-surface-500">Year {myEntry.user?.year === 'Alumni' ? '🎓' : myEntry.user?.year}</span>
+                      </div>
+                      <p className="font-bold text-surface-900 text-sm truncate">
+                        {myEntry.user?.full_name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0 bg-white/90 backdrop-blur-sm border border-brand-200/80 rounded-xl px-3 py-1.5 shadow-xs">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-surface-400">
+                      {leaderboardTab === 'streak' && 'Streak'}
+                      {leaderboardTab === 'lc_rating' && 'LC Rating'}
+                      {leaderboardTab === 'cf_rating' && 'CF Rating'}
+                      {leaderboardTab === 'total_solved' && 'Solved'}
+                      {leaderboardTab === 'lc_contest' && 'Rank'}
+                      {leaderboardTab === 'cf_contest' && 'Rank'}
+                    </div>
+                    <div className="text-base font-black text-brand-700">
                       {leaderboardTab === 'streak' && (
-                        <>
-                          <th className="py-2.5 px-3 text-right">Streak</th>
-                          <th className="py-2.5 px-3 text-right">Max</th>
-                        </>
+                        <span className="text-orange-600 flex items-center justify-end gap-1">
+                          {myEntry.current_streak || 0} 🔥
+                        </span>
                       )}
                       {leaderboardTab === 'lc_rating' && (
-                        <th className="py-2.5 px-3 text-right">LC Rating</th>
+                        <span className="text-amber-600">
+                          {myEntry.lc_rating ? Math.round(myEntry.lc_rating) : '—'}
+                        </span>
                       )}
                       {leaderboardTab === 'cf_rating' && (
-                        <>
-                          <th className="py-2.5 px-3 text-right">CF Rating</th>
-                          <th className="py-2.5 px-3 text-right">Max</th>
-                        </>
+                        <span className="text-blue-600">
+                          {myEntry.cf_rating || '—'}
+                        </span>
                       )}
                       {leaderboardTab === 'total_solved' && (
-                        <>
-                          <th className="py-2.5 px-2 text-right">LC</th>
-                          <th className="py-2.5 px-2 text-right">CF</th>
-                          <th className="py-2.5 px-3 text-right">Total</th>
-                        </>
+                        <span className="text-emerald-600">
+                          {(myEntry.lc_total_solved || 0) + (myEntry.cf_total_solved || 0)}
+                        </span>
                       )}
                       {leaderboardTab === 'lc_contest' && (
-                        <>
-                          <th className="py-2.5 px-3">Contest</th>
-                          <th className="py-2.5 px-3 text-right">Rank</th>
-                          <th className="py-2.5 px-3 text-right">Solved</th>
-                        </>
+                        <span className="text-amber-600">
+                          {myEntry.lc_latest_contest_rank ? `#${myEntry.lc_latest_contest_rank.toLocaleString()}` : '—'}
+                        </span>
                       )}
                       {leaderboardTab === 'cf_contest' && (
-                        <>
-                          <th className="py-2.5 px-3">Contest</th>
-                          <th className="py-2.5 px-3 text-right">Rank</th>
-                          <th className="py-2.5 px-3 text-right">Rating</th>
-                        </>
+                        <span className="text-blue-600">
+                          {myEntry.cf_latest_contest_rank ? `#${myEntry.cf_latest_contest_rank.toLocaleString()}` : '—'}
+                        </span>
                       )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-200/80">
-                    {sortedLeaderboard.length === 0 ? (
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-surface-50 border border-surface-200 rounded-xl p-2.5 mb-3 text-xs text-surface-500 flex items-center justify-between">
+                  <span className="font-medium">Your Ranking: Not yet ranked in this category</span>
+                  <span className="text-surface-400 text-[11px]">—</span>
+                </div>
+              )}
+
+              {/* Contest Info Banner (when on LC Contest or CF Contest tabs) */}
+              {leaderboardTab === 'lc_contest' && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-xl p-3 mb-3 flex items-center justify-between gap-2 shadow-sm text-xs">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded">
+                      LeetCode Contest
+                    </span>
+                    <h4 className="font-bold text-surface-900 truncate mt-1">{targetLCName}</h4>
+                  </div>
+                  <div className="bg-white/90 border border-amber-200/60 rounded-lg px-2.5 py-1 text-right shrink-0">
+                    <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
+                    <div className="text-sm font-black text-amber-600">{lcParticipantsCount} members</div>
+                  </div>
+                </div>
+              )}
+
+              {leaderboardTab === 'cf_contest' && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl p-3 mb-3 flex items-center justify-between gap-2 shadow-sm text-xs">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded">
+                      Codeforces Contest
+                    </span>
+                    <h4 className="font-bold text-surface-900 truncate mt-1">{targetCFName}</h4>
+                  </div>
+                  <div className="bg-white/90 border border-blue-200/60 rounded-lg px-2.5 py-1 text-right shrink-0">
+                    <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
+                    <div className="text-sm font-black text-blue-600">{cfParticipantsCount} members</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Leaderboard Table with 5 participants at a time */}
+              <div className="border border-surface-200 rounded-xl overflow-hidden bg-white">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-surface-100/80 text-surface-600 font-semibold uppercase text-[11px] tracking-wider border-b border-surface-200">
                       <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-surface-400">
-                          <Trophy className="w-8 h-8 text-surface-300 mx-auto mb-2" />
-                          <p className="font-semibold text-surface-700 text-sm">No leaderboard data found</p>
-                          <p className="text-xs text-surface-400 mt-1">
-                            {leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest' 
-                              ? 'No participants in this contest yet.' 
-                              : 'Rankings will appear once synced.'}
-                          </p>
-                        </td>
+                        <th className="py-2.5 px-3 w-10 text-center">#</th>
+                        <th className="py-2.5 px-3">Name</th>
+                        <th className="py-2.5 px-2 w-12 text-center">Year</th>
+                        {leaderboardTab === 'streak' && (
+                          <>
+                            <th className="py-2.5 px-3 text-right">Streak</th>
+                            <th className="py-2.5 px-3 text-right">Max</th>
+                          </>
+                        )}
+                        {leaderboardTab === 'lc_rating' && (
+                          <th className="py-2.5 px-3 text-right">LC Rating</th>
+                        )}
+                        {leaderboardTab === 'cf_rating' && (
+                          <>
+                            <th className="py-2.5 px-3 text-right">CF Rating</th>
+                            <th className="py-2.5 px-3 text-right">Max</th>
+                          </>
+                        )}
+                        {leaderboardTab === 'total_solved' && (
+                          <>
+                            <th className="py-2.5 px-2 text-right">LC</th>
+                            <th className="py-2.5 px-2 text-right">CF</th>
+                            <th className="py-2.5 px-3 text-right">Total</th>
+                          </>
+                        )}
+                        {leaderboardTab === 'lc_contest' && (
+                          <>
+                            <th className="py-2.5 px-3">Contest</th>
+                            <th className="py-2.5 px-3 text-right">Rank</th>
+                            <th className="py-2.5 px-3 text-right">Solved</th>
+                          </>
+                        )}
+                        {leaderboardTab === 'cf_contest' && (
+                          <>
+                            <th className="py-2.5 px-3">Contest</th>
+                            <th className="py-2.5 px-3 text-right">Rank</th>
+                            <th className="py-2.5 px-3 text-right">Rating</th>
+                          </>
+                        )}
                       </tr>
-                    ) : (
-                      paginatedLeaderboard.map((entry, index) => {
-                        const actualRank = (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + index;
-                        const isMe = entry.user_id === profile?.id;
-                        return (
-                          <tr 
-                            key={entry.user_id} 
-                            className={`hover:bg-surface-50 transition-colors ${isMe ? 'bg-brand-50/50 font-semibold' : ''}`}
-                          >
-                            <td className="py-2.5 px-3 text-center text-xs">
-                              {actualRank === 0 ? '🥇' : actualRank === 1 ? '🥈' : actualRank === 2 ? '🥉' : (
-                                <span className="text-surface-400 font-bold">{actualRank + 1}</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 font-medium text-surface-900 truncate max-w-[140px]">
-                              {entry.user?.full_name}
-                              {isMe && (
-                                <span className="ml-1.5 text-[9px] font-bold bg-brand-100 text-brand-700 px-1 py-0.2 rounded">YOU</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-2 text-center text-xs text-surface-500">
-                              {entry.user?.year === 'Alumni' ? '🎓' : entry.user?.year}
-                            </td>
-                            
-                            {leaderboardTab === 'streak' && (
-                              <>
-                                <td className="py-2.5 px-3 text-right">
-                                  <span className={`font-bold ${(entry.current_streak || 0) > 0 ? 'text-orange-600' : 'text-surface-400'}`}>
-                                    {entry.current_streak || 0} {(entry.current_streak || 0) > 0 ? '🔥' : ''}
-                                  </span>
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-bold text-surface-400 text-xs">
-                                  {entry.max_streak || 0}
-                                </td>
-                              </>
-                            )}
-
-                            {leaderboardTab === 'lc_rating' && (
-                              <td className="py-2.5 px-3 text-right font-bold text-amber-600">
-                                {entry.lc_rating ? Math.round(entry.lc_rating) : '—'}
+                    </thead>
+                    <tbody className="divide-y divide-surface-200/80">
+                      {sortedLeaderboard.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-12 text-center text-surface-400">
+                            <Trophy className="w-8 h-8 text-surface-300 mx-auto mb-2" />
+                            <p className="font-semibold text-surface-700 text-sm">No leaderboard data found</p>
+                            <p className="text-xs text-surface-400 mt-1">
+                              {leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest' 
+                                ? 'No participants in this contest yet.' 
+                                : 'Rankings will appear once synced.'}
+                            </p>
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedLeaderboard.map((entry, index) => {
+                          const actualRank = (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + index;
+                          const isMe = entry.user_id === profile?.id;
+                          return (
+                            <tr 
+                              key={entry.user_id} 
+                              className={`hover:bg-surface-50 transition-colors ${isMe ? 'bg-brand-50/50 font-semibold' : ''}`}
+                            >
+                              <td className="py-2.5 px-3 text-center text-xs">
+                                {actualRank === 0 ? '🥇' : actualRank === 1 ? '🥈' : actualRank === 2 ? '🥉' : (
+                                  <span className="text-surface-400 font-bold">{actualRank + 1}</span>
+                                )}
                               </td>
-                            )}
+                              <td className="py-2.5 px-3 font-medium text-surface-900 truncate max-w-[140px]">
+                                {entry.user?.full_name}
+                                {isMe && (
+                                  <span className="ml-1.5 text-[9px] font-bold bg-brand-100 text-brand-700 px-1 py-0.2 rounded">YOU</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-2 text-center text-xs text-surface-500">
+                                {entry.user?.year === 'Alumni' ? '🎓' : entry.user?.year}
+                              </td>
+                              
+                              {leaderboardTab === 'streak' && (
+                                <>
+                                  <td className="py-2.5 px-3 text-right">
+                                    <span className={`font-bold ${(entry.current_streak || 0) > 0 ? 'text-orange-600' : 'text-surface-400'}`}>
+                                      {entry.current_streak || 0} {(entry.current_streak || 0) > 0 ? '🔥' : ''}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-bold text-surface-400 text-xs">
+                                    {entry.max_streak || 0}
+                                  </td>
+                                </>
+                              )}
 
-                            {leaderboardTab === 'cf_rating' && (
-                              <>
-                                <td className="py-2.5 px-3 text-right font-bold text-blue-600">
-                                  {entry.cf_rating || '—'}
+                              {leaderboardTab === 'lc_rating' && (
+                                <td className="py-2.5 px-3 text-right font-bold text-amber-600">
+                                  {entry.lc_rating ? Math.round(entry.lc_rating) : '—'}
                                 </td>
-                                <td className="py-2.5 px-3 text-right font-bold text-surface-400 text-xs">
-                                  {entry.cf_max_rating || '—'}
-                                </td>
-                              </>
-                            )}
+                              )}
 
-                            {leaderboardTab === 'total_solved' && (
-                              <>
-                                <td className="py-2.5 px-2 text-right font-semibold text-amber-600 text-xs">
-                                  {entry.lc_total_solved || 0}
-                                </td>
-                                <td className="py-2.5 px-2 text-right font-semibold text-blue-600 text-xs">
-                                  {entry.cf_total_solved || 0}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-black text-emerald-600">
-                                  {(entry.lc_total_solved || 0) + (entry.cf_total_solved || 0)}
-                                </td>
-                              </>
-                            )}
+                              {leaderboardTab === 'cf_rating' && (
+                                <>
+                                  <td className="py-2.5 px-3 text-right font-bold text-blue-600">
+                                    {entry.cf_rating || '—'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-bold text-surface-400 text-xs">
+                                    {entry.cf_max_rating || '—'}
+                                  </td>
+                                </>
+                              )}
 
-                            {leaderboardTab === 'lc_contest' && (
-                              <>
-                                <td className="py-2.5 px-3 text-xs text-surface-600 max-w-[120px] truncate" title={entry.lc_latest_contest_name}>
-                                  {entry.lc_latest_contest_name || '—'}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-bold text-amber-600 text-xs">
-                                  {entry.lc_latest_contest_rank?.toLocaleString() || '—'}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-bold text-emerald-600 text-xs">
-                                  {entry.lc_latest_contest_solved ?? '—'}
-                                </td>
-                              </>
-                            )}
+                              {leaderboardTab === 'total_solved' && (
+                                <>
+                                  <td className="py-2.5 px-2 text-right font-semibold text-amber-600 text-xs">
+                                    {entry.lc_total_solved || 0}
+                                  </td>
+                                  <td className="py-2.5 px-2 text-right font-semibold text-blue-600 text-xs">
+                                    {entry.cf_total_solved || 0}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-black text-emerald-600">
+                                    {(entry.lc_total_solved || 0) + (entry.cf_total_solved || 0)}
+                                  </td>
+                                </>
+                              )}
 
-                            {leaderboardTab === 'cf_contest' && (
-                              <>
-                                <td className="py-2.5 px-3 text-xs text-surface-600 max-w-[120px] truncate" title={entry.cf_latest_contest_name}>
-                                  {entry.cf_latest_contest_name || '—'}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-bold text-blue-600 text-xs">
-                                  {entry.cf_latest_contest_rank?.toLocaleString() || '—'}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-bold text-emerald-600 text-xs">
-                                  {entry.cf_latest_contest_rating || '—'}
-                                </td>
-                              </>
-                            )}
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                              {leaderboardTab === 'lc_contest' && (
+                                <>
+                                  <td className="py-2.5 px-3 text-xs text-surface-600 max-w-[120px] truncate" title={entry.lc_latest_contest_name}>
+                                    {entry.lc_latest_contest_name || '—'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-bold text-amber-600 text-xs">
+                                    {entry.lc_latest_contest_rank?.toLocaleString() || '—'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-bold text-emerald-600 text-xs">
+                                    {entry.lc_latest_contest_solved ?? '—'}
+                                  </td>
+                                </>
+                              )}
 
-              {/* Slider / Pagination Footer for Leaderboard */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 border-t border-surface-200">
-                <span className="text-xs text-surface-500 font-medium order-2 sm:order-1">
-                  Showing {sortedLeaderboard.length === 0 ? 0 : (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + 1}–{Math.min(safeLeaderboardPage * LEADERBOARD_PER_PAGE, sortedLeaderboard.length)} of {sortedLeaderboard.length} participants
-                </span>
+                              {leaderboardTab === 'cf_contest' && (
+                                <>
+                                  <td className="py-2.5 px-3 text-xs text-surface-600 max-w-[120px] truncate" title={entry.cf_latest_contest_name}>
+                                    {entry.cf_latest_contest_name || '—'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-bold text-blue-600 text-xs">
+                                    {entry.cf_latest_contest_rank?.toLocaleString() || '—'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-bold text-emerald-600 text-xs">
+                                    {entry.cf_latest_contest_rating || '—'}
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
-                <div className="flex items-center gap-2 order-1 sm:order-2">
-                  <button 
-                    onClick={() => setLeaderboardPage(p => Math.max(1, p - 1))} 
-                    disabled={safeLeaderboardPage <= 1}
-                    className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
-                    title="Previous page"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max={totalLeaderboardPages} 
-                    value={safeLeaderboardPage} 
-                    onChange={(e) => setLeaderboardPage(Number(e.target.value))}
-                    disabled={totalLeaderboardPages <= 1}
-                    className="w-20 accent-brand-600 h-1.5 bg-surface-200 rounded-lg cursor-pointer disabled:opacity-40"
-                    title="Slide through participants"
-                  />
-
-                  <span className="text-xs font-semibold text-surface-700 min-w-[50px] text-center">
-                    {safeLeaderboardPage} / {totalLeaderboardPages}
+                {/* Slider / Pagination Footer for Leaderboard */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 border-t border-surface-200">
+                  <span className="text-xs text-surface-500 font-medium order-2 sm:order-1">
+                    Showing {sortedLeaderboard.length === 0 ? 0 : (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + 1}–{Math.min(safeLeaderboardPage * LEADERBOARD_PER_PAGE, sortedLeaderboard.length)} of {sortedLeaderboard.length} participants
                   </span>
 
-                  <button 
-                    onClick={() => setLeaderboardPage(p => Math.min(totalLeaderboardPages, p + 1))} 
-                    disabled={safeLeaderboardPage >= totalLeaderboardPages}
-                    className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
-                    title="Next page"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2 order-1 sm:order-2">
+                    <button 
+                      onClick={() => setLeaderboardPage(p => Math.max(1, p - 1))} 
+                      disabled={safeLeaderboardPage <= 1}
+                      className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                      title="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+
+                    <input 
+                      type="range" 
+                      min="1" 
+                      max={totalLeaderboardPages} 
+                      value={safeLeaderboardPage} 
+                      onChange={(e) => setLeaderboardPage(Number(e.target.value))}
+                      disabled={totalLeaderboardPages <= 1}
+                      className="w-20 accent-brand-600 h-1.5 bg-surface-200 rounded-lg cursor-pointer disabled:opacity-40"
+                      title="Slide through participants"
+                    />
+
+                    <span className="text-xs font-semibold text-surface-700 min-w-[50px] text-center">
+                      {safeLeaderboardPage} / {totalLeaderboardPages}
+                    </span>
+
+                    <button 
+                      onClick={() => setLeaderboardPage(p => Math.min(totalLeaderboardPages, p + 1))} 
+                      disabled={safeLeaderboardPage >= totalLeaderboardPages}
+                      className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                      title="Next page"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {leaderboardData[0]?.synced_at && (
+                  <div className="px-4 py-2 bg-surface-50/50 text-[11px] text-surface-400 border-t border-surface-100 flex items-center justify-between">
+                    <span>Last synced: {new Date(leaderboardData[0].synced_at).toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* MY COHORT CARD (Placed below Leaderboard) */}
+            <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.25s' }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-purple-100 rounded-xl text-purple-600 shadow-sm shadow-purple-500/10">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-surface-900">My Cohort</h3>
+                    <p className="text-xs text-surface-400 mt-0.5">
+                      {myMentees.length} {myMentees.length === 1 ? 'mentee' : 'mentees'} enrolled
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {leaderboardData[0]?.synced_at && (
-                <div className="px-4 py-2 bg-surface-50/50 text-[11px] text-surface-400 border-t border-surface-100 flex items-center justify-between">
-                  <span>Last synced: {new Date(leaderboardData[0].synced_at).toLocaleString()}</span>
+              {myMentees.length === 0 ? (
+                <div className="p-6 text-center text-surface-400 border border-dashed border-surface-200 rounded-xl">
+                  <UserPlus className="w-7 h-7 text-surface-300 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-surface-600">No mentees in your cohort yet</p>
+                  <p className="text-xs text-surface-400 mt-1">When students request you and an admin approves, they will appear here.</p>
                 </div>
+              ) : (
+                <ul className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                  {myMentees.map(m => (
+                    <li 
+                      key={m.id} 
+                      onClick={() => setSelectedMentee(m)}
+                      className="flex items-center justify-between p-3 rounded-xl bg-surface-50/70 border border-surface-200 hover:border-brand-300 hover:bg-brand-50/40 cursor-pointer transition-all group"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="font-bold text-surface-900 group-hover:text-brand-700 transition-colors text-sm truncate">
+                          {m.full_name}
+                        </div>
+                        <div className="text-xs text-surface-500 truncate">
+                          {m.email} &bull; Year {m.year}
+                        </div>
+                      </div>
+                      {menteeStats[m.id]?.hasAlert && (
+                        <div className="bg-red-100 text-red-600 p-1.5 rounded-lg shrink-0" title="Inactive for > 48 hours">
+                          <AlertCircle className="w-4 h-4" />
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>
@@ -986,9 +1112,9 @@ export default function Dashboard() {
 
           <div className="grid md:grid-cols-2 gap-8">
             
-            {/* Request Mentor & Manage Mentees */}
-            <div className="space-y-6">
-              <div className="card p-6">
+            {/* Request Mentor */}
+            <div className="card p-6 flex flex-col justify-between">
+              <div>
                 <h3 className="text-lg font-bold text-surface-900 mb-4">Request a Mentor</h3>
                 
                 <form onSubmit={handleRequestMentor} className="space-y-3">
@@ -1021,33 +1147,6 @@ export default function Dashboard() {
                       ))}
                     </ul>
                   </div>
-                )}
-              </div>
-
-              <div className="card p-6">
-                <h3 className="text-lg font-bold text-surface-900 mb-4">My Cohort ({myMentees.length})</h3>
-                {myMentees.length === 0 ? (
-                  <p className="text-sm text-surface-500">You don't have any mentees yet.</p>
-                ) : (
-                  <ul className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                    {myMentees.map(m => (
-                      <li 
-                        key={m.id} 
-                        onClick={() => setSelectedMentee(m)}
-                        className="flex items-center justify-between p-3 rounded-xl bg-surface-50 border border-surface-200 hover:border-brand-300 hover:bg-brand-50 cursor-pointer transition-all group"
-                      >
-                        <div>
-                          <div className="font-bold text-surface-900 group-hover:text-brand-700 transition-colors">{m.full_name}</div>
-                          <div className="text-xs text-surface-500">{m.email} &bull; Year {m.year}</div>
-                        </div>
-                        {menteeStats[m.id]?.hasAlert && (
-                          <div className="bg-red-100 text-red-600 p-1.5 rounded-lg" title="Inactive for > 48 hours">
-                            <AlertCircle className="w-5 h-5" />
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
                 )}
               </div>
             </div>
