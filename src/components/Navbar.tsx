@@ -41,9 +41,13 @@ export default function Navbar({ fullName, role }: NavbarProps) {
               <p className="text-sm font-semibold text-surface-900">{fullName}</p>
               <p className="text-[11px] text-surface-300 capitalize">{role} Dashboard</p>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+            <button
+              onClick={() => router.push('/profile')}
+              className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-sm shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 cursor-pointer"
+              title="View Profile"
+            >
               {fullName?.charAt(0)?.toUpperCase() || '?'}
-            </div>
+            </button>
             <button
               onClick={handleLogout}
               className="p-2 rounded-xl text-surface-300 hover:text-red-500 hover:bg-red-50 transition-all duration-200"

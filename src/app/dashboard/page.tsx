@@ -261,6 +261,23 @@ export default function Dashboard() {
     await supabase.from('users').update({ just_promoted: false }).eq('id', profile!.id);
   };
 
+  const handleRemoveMentee = async (menteeId: string, menteeName: string) => {
+    if (!confirm(`Are you sure you want to remove ${menteeName} from your cohort? This will delete the mentorship link.`)) return;
+    
+    const { error } = await supabase
+      .from('mentorships')
+      .delete()
+      .eq('mentor_id', profile!.id)
+      .eq('mentee_id', menteeId);
+
+    if (error) {
+      alert('Failed to remove mentee. Please try again.');
+    } else {
+      // Remove from local state immediately
+      setMyMentees(prev => prev.filter(m => m.id !== menteeId));
+    }
+  };
+
   // Sort tasks: newest problem at the top
   const sortedTasks = useMemo(() => {
     return [...myTasks].sort((a, b) => {
@@ -1087,11 +1104,23 @@ export default function Dashboard() {
                           {m.email} &bull; Year {m.year}
                         </div>
                       </div>
-                      {menteeStats[m.id]?.hasAlert && (
-                        <div className="bg-red-100 text-red-600 p-1.5 rounded-lg shrink-0" title="Inactive for > 48 hours">
-                          <AlertCircle className="w-4 h-4" />
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {menteeStats[m.id]?.hasAlert && (
+                          <div className="bg-red-100 text-red-600 p-1.5 rounded-lg" title="Inactive for > 48 hours">
+                            <AlertCircle className="w-4 h-4" />
+                          </div>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveMentee(m.id, m.full_name);
+                          }}
+                          className="p-1.5 rounded-lg text-surface-300 hover:text-red-600 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"
+                          title={`Remove ${m.full_name} from cohort`}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>

@@ -286,20 +286,46 @@ export default function AdminDashboard() {
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-200">
                 {otherUsers.map(u => (
-                  <tr key={u.id} className="hover:bg-surface-50">
+                  <tr key={u.id} className={`hover:bg-surface-50 ${u.approval_status === 'rejected' ? 'opacity-60' : ''}`}>
                     <td className="px-4 py-3 font-medium text-surface-900">{u.full_name}</td>
                     <td className="px-4 py-3 font-bold text-surface-700">{u.year === 'Alumni' ? '🎓 Alumni' : u.year}</td>
                     <td className="px-4 py-3 text-surface-500">{u.email}</td>
                     <td className="px-4 py-3 capitalize">
                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${u.approval_status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                        {u.approval_status}
+                        {u.approval_status === 'approved' ? 'Active' : u.approval_status === 'rejected' ? 'Deactivated' : u.approval_status}
                       </span>
                     </td>
                     <td className="px-4 py-3 font-semibold text-brand-600 uppercase text-xs">{u.role}</td>
+                    <td className="px-4 py-3 text-right">
+                      {u.approval_status === 'approved' ? (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Deactivate ${u.full_name}? They will lose access to the dashboard.`)) {
+                              handleApproval(u.id, 'rejected');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition-all"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5" /> Deactivate
+                        </button>
+                      ) : u.approval_status === 'rejected' ? (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Reactivate ${u.full_name}? They will regain access to the dashboard.`)) {
+                              handleApproval(u.id, 'approved');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-all"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" /> Reactivate
+                        </button>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
