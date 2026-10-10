@@ -47,10 +47,8 @@ export default function LoginPage() {
       window.location.href = '/pending';
     } else if (profile.role === 'admin') {
       window.location.href = '/admin';
-    } else if (profile.role === 'mentor') {
-      window.location.href = '/mentor';
     } else {
-      window.location.href = '/mentee';
+      window.location.href = '/dashboard';
     }
   };
 

@@ -7,7 +7,7 @@
 -- ────────────────────────────────────────────────────────────
 CREATE TABLE public.users (
   id               UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  role             TEXT NOT NULL CHECK (role IN ('admin', 'mentor', 'mentee')),
+  role             TEXT NOT NULL CHECK (role IN ('admin', 'user')),
   approval_status  TEXT NOT NULL DEFAULT 'pending' CHECK (approval_status IN ('pending', 'approved', 'rejected')),
   
   full_name        TEXT NOT NULL,
@@ -36,7 +36,19 @@ CREATE TABLE public.mentorships (
 );
 
 -- ────────────────────────────────────────────────────────────
--- 3. TASKS TABLE
+-- 3. MENTORSHIP REQUESTS TABLE
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE public.mentorship_requests (
+  id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  mentor_id  UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  mentee_id  UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT unique_mentorship_req UNIQUE (mentor_id, mentee_id)
+);
+
+-- ────────────────────────────────────────────────────────────
+-- 4. TASKS TABLE
 -- ────────────────────────────────────────────────────────────
 CREATE TABLE public.tasks (
   id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -73,32 +85,30 @@ AS $$
 $$;
 
 -- ── USERS ───────────────────────────────────────────────────
--- Admins can view and update all users
-CREATE POLICY "Admins can view all users" ON public.users FOR SELECT USING (public.is_admin());
+CREATE POLICY "Anyone can view user profiles" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Admins can update all users" ON public.users FOR UPDATE USING (public.is_admin());
-
-CREATE POLICY "Users can view own profile" ON public.users FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Mentors can view mentee profiles" ON public.users FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.mentorships WHERE mentor_id = auth.uid() AND mentee_id = users.id)
-);
 CREATE POLICY "Users can update own profile" ON public.users FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can insert own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- ── MENTORSHIPS ─────────────────────────────────────────────
 CREATE POLICY "Admins can view all mentorships" ON public.mentorships FOR SELECT USING (public.is_admin());
-CREATE POLICY "Mentors can view own mentorships" ON public.mentorships FOR SELECT USING (mentor_id = auth.uid());
-CREATE POLICY "Mentees can view own mentorships" ON public.mentorships FOR SELECT USING (mentee_id = auth.uid());
-CREATE POLICY "Mentors can create mentorships" ON public.mentorships FOR INSERT WITH CHECK (
-  mentor_id = auth.uid() AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'mentor')
-);
-CREATE POLICY "Mentors can delete own mentorships" ON public.mentorships FOR DELETE USING (mentor_id = auth.uid());
+CREATE POLICY "Users can view own mentorships" ON public.mentorships FOR SELECT USING (mentor_id = auth.uid() OR mentee_id = auth.uid());
+CREATE POLICY "Admins can insert mentorships" ON public.mentorships FOR INSERT WITH CHECK (public.is_admin());
+CREATE POLICY "Admins can delete mentorships" ON public.mentorships FOR DELETE USING (public.is_admin());
+
+-- ── MENTORSHIP REQUESTS ───────────────────────────────────
+ALTER TABLE public.mentorship_requests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins can view all mentorship requests" ON public.mentorship_requests FOR SELECT USING (public.is_admin());
+CREATE POLICY "Users can view own requests" ON public.mentorship_requests FOR SELECT USING (mentor_id = auth.uid() OR mentee_id = auth.uid());
+CREATE POLICY "Users can create mentorship requests" ON public.mentorship_requests FOR INSERT WITH CHECK (mentor_id = auth.uid());
+CREATE POLICY "Admins can update mentorship requests" ON public.mentorship_requests FOR UPDATE USING (public.is_admin());
 
 -- ── TASKS ───────────────────────────────────────────────────
 CREATE POLICY "Admins can view all tasks" ON public.tasks FOR SELECT USING (public.is_admin());
 CREATE POLICY "Mentees can view own tasks" ON public.tasks FOR SELECT USING (assigned_to = auth.uid());
 CREATE POLICY "Mentors can view assigned tasks" ON public.tasks FOR SELECT USING (assigned_by = auth.uid());
 CREATE POLICY "Mentors can create tasks" ON public.tasks FOR INSERT WITH CHECK (
-  assigned_by = auth.uid() AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'mentor')
+  assigned_by = auth.uid() AND EXISTS (SELECT 1 FROM public.mentorships WHERE mentor_id = auth.uid() AND mentee_id = tasks.assigned_to)
 );
 CREATE POLICY "Mentees can update own task status" ON public.tasks FOR UPDATE USING (assigned_to = auth.uid()) WITH CHECK (assigned_to = auth.uid());
 
@@ -114,7 +124,7 @@ BEGIN
   INSERT INTO public.users (id, role, approval_status, full_name, email, year, branch, contact_number, roll_number, cf_handle, lc_handle)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data ->> 'role', 'mentee'),
+    COALESCE(NEW.raw_user_meta_data ->> 'role', 'user'),
     'pending', -- All new users are pending by default
     COALESCE(NEW.raw_user_meta_data ->> 'full_name', ''),
     NEW.email,

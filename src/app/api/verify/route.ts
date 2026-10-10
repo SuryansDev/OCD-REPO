@@ -28,7 +28,14 @@ function createRouteHandlerClient(request: NextRequest) {
 }
 
 // ─── Codeforces verification ────────────────────────────────
-async function verifyCodeforces(cfHandle: string, problemId: string): Promise<boolean> {
+async function verifyCodeforces(cfHandleInput: string, problemId: string): Promise<boolean> {
+  // Normalize cfHandle just in case they provided a profile URL
+  let cfHandle = cfHandleInput.trim();
+  if (cfHandle.includes('codeforces.com/profile/')) {
+    const match = cfHandle.match(/profile\/([^\/]+)/);
+    if (match) cfHandle = match[1];
+  }
+  
   // problemId format: "contestId/problemIndex" e.g. "1920/A" or just "1920A"
   // Normalize: accept "1920/A", "1920A", "1920/a"
   let contestId: string;
@@ -70,7 +77,14 @@ async function verifyCodeforces(cfHandle: string, problemId: string): Promise<bo
 }
 
 // ─── LeetCode verification ─────────────────────────────────
-async function verifyLeetCode(lcHandle: string, titleSlug: string): Promise<boolean> {
+async function verifyLeetCode(lcHandleInput: string, titleSlug: string): Promise<boolean> {
+  // Normalize lcHandle just in case they provided a profile URL
+  let lcHandle = lcHandleInput.trim();
+  if (lcHandle.includes('leetcode.com/')) {
+    const match = lcHandle.match(/leetcode\.com\/(?:u\/)?([^\/]+)/);
+    if (match) lcHandle = match[1];
+  }
+
   // Normalize the slug
   const normalizedSlug = titleSlug
     .toLowerCase()

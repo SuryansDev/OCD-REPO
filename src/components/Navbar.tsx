@@ -6,7 +6,7 @@ import { Code2, LogOut } from 'lucide-react';
 
 interface NavbarProps {
   fullName: string;
-  role: 'admin' | 'mentor' | 'mentee';
+  role: 'admin' | 'user';
 }
 
 export default function Navbar({ fullName, role }: NavbarProps) {

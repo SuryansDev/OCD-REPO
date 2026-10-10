@@ -34,30 +34,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Verify mentor role
-  const { data: profile } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  const body = await request.json();
+  const { link } = body;
 
-  if (profile?.role !== 'mentor') {
-    return NextResponse.json({ error: 'Only mentors can create tasks' }, { status: 403 });
+  if (!link) {
+    return NextResponse.json({ error: 'link is required' }, { status: 400 });
   }
 
-  const body = await request.json();
-  const { platform, problemSlugOrId } = body;
+  let platform = '';
+  let problemSlugOrId = '';
+
+  try {
+    const url = new URL(link);
+    if (url.hostname.includes('codeforces.com')) {
+      platform = 'Codeforces';
+      const match = link.match(/problem\/(\d+)\/([A-Za-z0-9]+)/);
+      if (match) problemSlugOrId = `${match[1]}${match[2]}`;
+    } else if (url.hostname.includes('leetcode.com')) {
+      platform = 'LeetCode';
+      const match = link.match(/problems\/([^\/]+)/);
+      if (match) problemSlugOrId = match[1];
+    }
+  } catch (e) {
+    return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
+  }
 
   if (!platform || !problemSlugOrId) {
     return NextResponse.json(
-      { error: 'platform and problemSlugOrId are required' },
-      { status: 400 }
-    );
-  }
-
-  if (!['Codeforces', 'LeetCode'].includes(platform)) {
-    return NextResponse.json(
-      { error: 'platform must be Codeforces or LeetCode' },
+      { error: 'Could not parse problem from the provided link. Ensure it is a valid Codeforces or LeetCode problem URL.' },
       { status: 400 }
     );
   }

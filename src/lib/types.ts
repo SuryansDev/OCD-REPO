@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'mentor' | 'mentee';
+export type UserRole = 'admin' | 'user';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type Platform = 'Codeforces' | 'LeetCode';
 export type TaskStatus = 'Pending' | 'Completed';
@@ -16,12 +16,21 @@ export interface UserProfile {
   cf_handle: string | null;
   lc_handle: string | null;
   created_at: string;
+  just_promoted?: boolean;
 }
 
 export interface Mentorship {
   id: number;
   mentor_id: string;
   mentee_id: string;
+  created_at: string;
+}
+
+export interface MentorshipRequest {
+  id: number;
+  mentor_id: string;
+  mentee_id: string;
+  status: ApprovalStatus;
   created_at: string;
 }
 

@@ -34,8 +34,7 @@ export async function updateSession(request: NextRequest) {
   console.log('All Cookies:', request.cookies.getAll().map(c => c.name));
   console.log('User ID:', user?.id, 'User Error:', userError?.message);
 
-  const isProtected = request.nextUrl.pathname.startsWith('/mentor') ||
-                      request.nextUrl.pathname.startsWith('/mentee') ||
+  const isProtected = request.nextUrl.pathname.startsWith('/dashboard') ||
                       request.nextUrl.pathname.startsWith('/admin');
 
   if (isProtected && !user) {
@@ -78,19 +77,17 @@ export async function updateSession(request: NextRequest) {
           }
         } else {
           // They are approved (or admin). Let's redirect if they are on auth/pending pages
-          if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup' || request.nextUrl.pathname === '/pending') {
+          if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup' || request.nextUrl.pathname === '/pending' || request.nextUrl.pathname === '/') {
             if (profile.role === 'admin') {
               return NextResponse.redirect(new URL('/admin', request.url));
-            } else if (profile.role === 'mentor') {
-              return NextResponse.redirect(new URL('/mentor', request.url));
             } else {
-              return NextResponse.redirect(new URL('/mentee', request.url));
+              return NextResponse.redirect(new URL('/dashboard', request.url));
             }
           }
           
           // Role-based protection
           if (request.nextUrl.pathname.startsWith('/admin') && profile.role !== 'admin') {
-            return NextResponse.redirect(new URL(profile.role === 'mentor' ? '/mentor' : '/mentee', request.url));
+            return NextResponse.redirect(new URL('/dashboard', request.url));
           }
         }
       }
