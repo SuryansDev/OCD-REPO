@@ -209,18 +209,19 @@ export default function AdminDashboard() {
                 if (!confirm('Are you absolutely sure? This will shift EVERY user in the database up one year.')) return;
                 
                 const updates = otherUsers.map(u => {
-                  let next = u.year;
-                  const currentYearNum = parseInt(u.year.replace(/\D/g, ''), 10);
+                  let next = u.year || '';
+                  const yearStr = u.year || '';
+                  const currentYearNum = parseInt(yearStr.replace(/\D/g, ''), 10);
                   
-                  if (u.year === 'Alumni') {
+                  if (yearStr === 'Alumni') {
                     next = 'Alumni';
-                  } else if (currentYearNum === 1 || u.year.startsWith('1')) {
+                  } else if (currentYearNum === 1 || yearStr.startsWith('1')) {
                     next = '2';
-                  } else if (currentYearNum === 2 || u.year.startsWith('2')) {
+                  } else if (currentYearNum === 2 || yearStr.startsWith('2')) {
                     next = '3';
-                  } else if (currentYearNum === 3 || u.year.startsWith('3')) {
+                  } else if (currentYearNum === 3 || yearStr.startsWith('3')) {
                     next = '4';
-                  } else if (currentYearNum === 4 || u.year.startsWith('4')) {
+                  } else if (currentYearNum === 4 || yearStr.startsWith('4')) {
                     next = 'Alumni';
                   }
 
@@ -240,6 +241,33 @@ export default function AdminDashboard() {
               className="btn-primary whitespace-nowrap bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
             >
               Progress Academic Year
+            </button>
+          </div>
+          
+          <div className="card overflow-hidden p-6 border-emerald-200 border-2 bg-emerald-50/30 flex items-start justify-between mt-4">
+            <div>
+              <h3 className="text-lg font-bold text-surface-900">Sync Leaderboard Rankings</h3>
+              <p className="text-sm text-surface-600 mt-1 max-w-xl">
+                Pull the latest LeetCode &amp; Codeforces stats for every approved user — ratings, contest history, 
+                total problems solved, and solving streaks.
+              </p>
+            </div>
+            <button 
+              onClick={async () => {
+                if (!confirm('This will fetch stats from LeetCode & Codeforces for all users. It may take a minute.')) return;
+                setLoading(true);
+                try {
+                  const res = await fetch('/api/leaderboard/sync', { method: 'POST' });
+                  const data = await res.json();
+                  alert(data.message || 'Sync complete!');
+                } catch {
+                  alert('Sync failed.');
+                }
+                setLoading(false);
+              }}
+              className="btn-primary whitespace-nowrap bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
+            >
+              Sync Rankings
             </button>
           </div>
         </section>

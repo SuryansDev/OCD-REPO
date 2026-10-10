@@ -7,7 +7,7 @@ import Navbar from '@/components/Navbar';
 import PlatformBadge from '@/components/PlatformBadge';
 import Confetti from '@/components/Confetti';
 import type { UserProfile, Task } from '@/lib/types';
-import { Loader2, PlusCircle, CheckCircle, Code2, Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink } from 'lucide-react';
+import { Loader2, PlusCircle, CheckCircle, Code2, Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink, Trophy, Flame, BarChart3, Award } from 'lucide-react';
 
 const getTaskLink = (task: any) => {
   if (task.platform === 'LeetCode') {
@@ -51,6 +51,14 @@ export default function Dashboard() {
   const [selectedTaskGroup, setSelectedTaskGroup] = useState<any | null>(null);
   const [selectedMentee, setSelectedMentee] = useState<UserProfile | null>(null);
   const [showPromotion, setShowPromotion] = useState(false);
+
+  // Leaderboard state
+  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+  const [latestContests, setLatestContests] = useState<{
+    lc?: { title?: string; titleSlug?: string; startTime?: string; duration?: number };
+    cf?: { id?: number; name?: string; relatedNames?: string[]; startTime?: string; totalContestParticipants?: number | null };
+  }>({});
+  const [leaderboardTab, setLeaderboardTab] = useState<'streak' | 'lc_rating' | 'cf_rating' | 'total_solved' | 'lc_contest' | 'cf_contest'>('streak');
 
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -99,6 +107,16 @@ export default function Dashboard() {
     // Fetch pending requests I made (asking someone to be my mentor)
     const { data: reqs } = await supabase.from('mentorship_requests').select('*, mentor:users!mentorship_requests_mentor_id_fkey(full_name)').eq('mentee_id', user.id).eq('status', 'pending');
     if (reqs) setPendingRequests(reqs);
+
+    // Fetch leaderboard data
+    try {
+      const lbRes = await fetch('/api/leaderboard/sync');
+      if (lbRes.ok) {
+        const lbData = await lbRes.json();
+        if (lbData.stats) setLeaderboardData(lbData.stats);
+        if (lbData.latest_contests) setLatestContests(lbData.latest_contests);
+      }
+    } catch {}
 
     setLoading(false);
   }, [supabase, router]);
@@ -626,6 +644,319 @@ export default function Dashboard() {
 
           </div>
         </section>
+
+        {/* --- LEADERBOARD SECTION --- */}
+        {leaderboardData.length > 0 && (
+          <section className="animate-fade-in pt-8 border-t border-surface-200" style={{ animationDelay: '0.3s' }}>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
+                <Trophy className="w-5 h-5" />
+              </div>
+              <h2 className="text-2xl font-bold text-surface-900">Leaderboard</h2>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              {([
+                { key: 'streak', label: '🔥 Streak', icon: Flame },
+                { key: 'lc_rating', label: 'LC Rating', icon: BarChart3 },
+                { key: 'cf_rating', label: 'CF Rating', icon: BarChart3 },
+                { key: 'total_solved', label: 'Total Solved', icon: Award },
+                { key: 'lc_contest', label: 'LC Contest', icon: Trophy },
+                { key: 'cf_contest', label: 'CF Contest', icon: Trophy },
+              ] as const).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setLeaderboardTab(tab.key)}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                    leaderboardTab === tab.key
+                      ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30'
+                      : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Contest Info Banner (when on LC Contest or CF Contest tabs) */}
+            {(() => {
+              const targetLCName = latestContests.lc?.title || (
+                leaderboardData
+                  .filter(s => s.lc_latest_contest_date)
+                  .sort((a, b) => new Date(b.lc_latest_contest_date).getTime() - new Date(a.lc_latest_contest_date).getTime())[0]?.lc_latest_contest_name
+              ) || 'Latest Contest';
+
+              const targetCFName = latestContests.cf?.name || (
+                leaderboardData
+                  .filter(s => s.cf_latest_contest_date)
+                  .sort((a, b) => new Date(b.cf_latest_contest_date).getTime() - new Date(a.cf_latest_contest_date).getTime())[0]?.cf_latest_contest_name
+              ) || 'Latest Contest';
+
+              const targetCFNames = latestContests.cf?.relatedNames?.length
+                ? latestContests.cf.relatedNames
+                : (targetCFName ? [targetCFName] : []);
+
+              const lcParticipantsCount = leaderboardData.filter(s => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName).length;
+              const cfParticipantsCount = leaderboardData.filter(s => s.cf_latest_contest_name && (targetCFNames.length > 0 ? targetCFNames.includes(s.cf_latest_contest_name) : s.cf_latest_contest_name === targetCFName)).length;
+
+              if (leaderboardTab === 'lc_contest') {
+                return (
+                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-md shadow-amber-500/20">
+                        <Trophy className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md">
+                            Latest LeetCode Contest
+                          </span>
+                          {latestContests.lc?.startTime && (
+                            <span className="text-xs text-amber-700">
+                              • Held on {new Date(latestContests.lc.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-lg font-bold text-surface-900 mt-0.5">
+                          {targetLCName}
+                        </h3>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 self-end sm:self-auto bg-white/80 backdrop-blur-sm border border-amber-200/60 rounded-xl px-4 py-2">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase text-surface-400">Total Participants</div>
+                        <div className="text-xl font-black text-amber-600">
+                          {lcParticipantsCount} <span className="text-xs font-medium text-surface-500">members</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (leaderboardTab === 'cf_contest') {
+                return (
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/20">
+                        <Trophy className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">
+                            Latest Codeforces Contest
+                          </span>
+                          {latestContests.cf?.startTime && (
+                            <span className="text-xs text-blue-700">
+                              • Held on {new Date(latestContests.cf.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-lg font-bold text-surface-900 mt-0.5">
+                          {targetCFName}
+                        </h3>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 self-end sm:self-auto bg-white/80 backdrop-blur-sm border border-blue-200/60 rounded-xl px-4 py-2">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase text-surface-400">Total Participants</div>
+                        <div className="text-xl font-black text-blue-600">
+                          {cfParticipantsCount} <span className="text-xs font-medium text-surface-500">members</span>
+                        </div>
+                      </div>
+                      {latestContests.cf?.totalContestParticipants && (
+                        <div className="border-l border-surface-200 pl-4">
+                          <div className="text-[10px] font-bold uppercase text-surface-400">Global Turnout</div>
+                          <div className="text-sm font-bold text-surface-700">
+                            {latestContests.cf.totalContestParticipants.toLocaleString()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
+
+            {/* Rankings Table */}
+            <div className="card overflow-hidden">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-surface-100 text-surface-600 font-semibold uppercase text-xs">
+                  <tr>
+                    <th className="px-4 py-3 w-12">#</th>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Year</th>
+                    {leaderboardTab === 'streak' && (
+                      <>
+                        <th className="px-4 py-3 text-right">Current Streak</th>
+                        <th className="px-4 py-3 text-right">Max Streak</th>
+                      </>
+                    )}
+                    {leaderboardTab === 'lc_rating' && (
+                      <th className="px-4 py-3 text-right">LeetCode Rating</th>
+                    )}
+                    {leaderboardTab === 'cf_rating' && (
+                      <>
+                        <th className="px-4 py-3 text-right">CF Rating</th>
+                        <th className="px-4 py-3 text-right">Max Rating</th>
+                      </>
+                    )}
+                    {leaderboardTab === 'total_solved' && (
+                      <>
+                        <th className="px-4 py-3 text-right">LC Solved</th>
+                        <th className="px-4 py-3 text-right">CF Solved</th>
+                        <th className="px-4 py-3 text-right">Total</th>
+                      </>
+                    )}
+                    {leaderboardTab === 'lc_contest' && (
+                      <>
+                        <th className="px-4 py-3">Contest</th>
+                        <th className="px-4 py-3 text-right">Rank</th>
+                        <th className="px-4 py-3 text-right">Solved</th>
+                      </>
+                    )}
+                    {leaderboardTab === 'cf_contest' && (
+                      <>
+                        <th className="px-4 py-3">Contest</th>
+                        <th className="px-4 py-3 text-right">Rank</th>
+                        <th className="px-4 py-3 text-right">New Rating</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-200">
+                  {(() => {
+                    let sorted = [...leaderboardData];
+
+                    const targetLCName = latestContests.lc?.title || (
+                      sorted
+                        .filter(s => s.lc_latest_contest_date)
+                        .sort((a, b) => new Date(b.lc_latest_contest_date).getTime() - new Date(a.lc_latest_contest_date).getTime())[0]?.lc_latest_contest_name
+                    ) || '';
+
+                    const targetCFName = latestContests.cf?.name || (
+                      sorted
+                        .filter(s => s.cf_latest_contest_date)
+                        .sort((a, b) => new Date(b.cf_latest_contest_date).getTime() - new Date(a.cf_latest_contest_date).getTime())[0]?.cf_latest_contest_name
+                    ) || '';
+
+                    const targetCFNames = latestContests.cf?.relatedNames?.length
+                      ? latestContests.cf.relatedNames
+                      : (targetCFName ? [targetCFName] : []);
+                    
+                    if (leaderboardTab === 'streak') {
+                      sorted.sort((a, b) => (b.current_streak || 0) - (a.current_streak || 0));
+                    } else if (leaderboardTab === 'lc_rating') {
+                      sorted.sort((a, b) => (b.lc_rating || 0) - (a.lc_rating || 0));
+                    } else if (leaderboardTab === 'cf_rating') {
+                      sorted.sort((a, b) => (b.cf_rating || 0) - (a.cf_rating || 0));
+                    } else if (leaderboardTab === 'total_solved') {
+                      sorted.sort((a, b) => ((b.lc_total_solved || 0) + (b.cf_total_solved || 0)) - ((a.lc_total_solved || 0) + (a.cf_total_solved || 0)));
+                    } else if (leaderboardTab === 'lc_contest') {
+                      sorted = targetLCName ? sorted.filter(s => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName) : [];
+                      sorted.sort((a, b) => (a.lc_latest_contest_rank || 999999) - (b.lc_latest_contest_rank || 999999));
+                    } else if (leaderboardTab === 'cf_contest') {
+                      sorted = targetCFNames.length > 0 ? sorted.filter(s => s.cf_latest_contest_name && targetCFNames.includes(s.cf_latest_contest_name)) : [];
+                      sorted.sort((a, b) => (a.cf_latest_contest_rank || 999999) - (b.cf_latest_contest_rank || 999999));
+                    }
+
+                    if ((leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest') && sorted.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-12 text-center">
+                            <div className="max-w-sm mx-auto text-center">
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 ${
+                                leaderboardTab === 'lc_contest' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+                              }`}>
+                                <Trophy className="w-6 h-6" />
+                              </div>
+                              <p className="font-bold text-surface-800 text-base">
+                                No members participated in {leaderboardTab === 'lc_contest' ? (targetLCName || 'the latest contest') : (targetCFName || 'the latest contest')}
+                              </p>
+                              <p className="text-xs text-surface-500 mt-1.5">
+                                Total participants: 0. Members who participate in this contest will appear here automatically after sync.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return sorted.map((entry, index) => (
+                      <tr key={entry.user_id} className={`hover:bg-surface-50 ${entry.user_id === profile?.id ? 'bg-brand-50/50 font-semibold' : ''}`}>
+                        <td className="px-4 py-3">
+                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (
+                            <span className="text-surface-400 font-bold">{index + 1}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-surface-900">
+                          {entry.user?.full_name}
+                          {entry.user_id === profile?.id && (
+                            <span className="ml-2 text-[10px] font-bold bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded">YOU</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-surface-500">{entry.user?.year === 'Alumni' ? '🎓' : entry.user?.year}</td>
+                        
+                        {leaderboardTab === 'streak' && (
+                          <>
+                            <td className="px-4 py-3 text-right">
+                              <span className={`font-bold ${(entry.current_streak || 0) > 0 ? 'text-orange-600' : 'text-surface-400'}`}>
+                                {entry.current_streak || 0} {(entry.current_streak || 0) > 0 ? '🔥' : ''}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right font-bold text-surface-500">{entry.max_streak || 0}</td>
+                          </>
+                        )}
+                        {leaderboardTab === 'lc_rating' && (
+                          <td className="px-4 py-3 text-right font-bold text-amber-600">
+                            {entry.lc_rating ? Math.round(entry.lc_rating) : '—'}
+                          </td>
+                        )}
+                        {leaderboardTab === 'cf_rating' && (
+                          <>
+                            <td className="px-4 py-3 text-right font-bold text-blue-600">{entry.cf_rating || '—'}</td>
+                            <td className="px-4 py-3 text-right font-bold text-surface-500">{entry.cf_max_rating || '—'}</td>
+                          </>
+                        )}
+                        {leaderboardTab === 'total_solved' && (
+                          <>
+                            <td className="px-4 py-3 text-right font-bold text-amber-600">{entry.lc_total_solved || 0}</td>
+                            <td className="px-4 py-3 text-right font-bold text-blue-600">{entry.cf_total_solved || 0}</td>
+                            <td className="px-4 py-3 text-right font-black text-emerald-600">{(entry.lc_total_solved || 0) + (entry.cf_total_solved || 0)}</td>
+                          </>
+                        )}
+                        {leaderboardTab === 'lc_contest' && (
+                          <>
+                            <td className="px-4 py-3 text-xs text-surface-600 max-w-[200px] truncate">{entry.lc_latest_contest_name || '—'}</td>
+                            <td className="px-4 py-3 text-right font-bold text-amber-600">{entry.lc_latest_contest_rank?.toLocaleString() || '—'}</td>
+                            <td className="px-4 py-3 text-right font-bold text-emerald-600">{entry.lc_latest_contest_solved ?? '—'}</td>
+                          </>
+                        )}
+                        {leaderboardTab === 'cf_contest' && (
+                          <>
+                            <td className="px-4 py-3 text-xs text-surface-600 max-w-[200px] truncate">{entry.cf_latest_contest_name || '—'}</td>
+                            <td className="px-4 py-3 text-right font-bold text-blue-600">{entry.cf_latest_contest_rank?.toLocaleString() || '—'}</td>
+                            <td className="px-4 py-3 text-right font-bold text-emerald-600">{entry.cf_latest_contest_rating || '—'}</td>
+                          </>
+                        )}
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+              </table>
+              
+              {/* Last synced */}
+              {leaderboardData[0]?.synced_at && (
+                <div className="px-4 py-3 bg-surface-50 text-xs text-surface-400 border-t border-surface-100">
+                  Last synced: {new Date(leaderboardData[0].synced_at).toLocaleString()}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
       </main>
     </div>
