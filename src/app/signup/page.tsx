@@ -80,39 +80,55 @@ export default function SignupPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Full Name *</label>
-                <input name="full_name" type="text" onChange={handleChange} required className="input-field" />
+                <input name="full_name" type="text" onChange={handleChange} required minLength={2} className="input-field" placeholder="John Doe" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Email *</label>
-                <input name="email" type="email" onChange={handleChange} required className="input-field" />
+                <input name="email" type="email" onChange={handleChange} required className="input-field" placeholder="john@example.com" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Password *</label>
-                <input name="password" type="password" onChange={handleChange} required className="input-field" />
+                <input name="password" type="password" onChange={handleChange} required minLength={6} className="input-field" placeholder="Min 6 characters" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Roll Number *</label>
-                <input name="roll_number" type="text" onChange={handleChange} required className="input-field" />
+                <input name="roll_number" type="text" onChange={handleChange} required pattern="^[A-Za-z0-9]+$" title="Alphanumeric only, no spaces or special characters" className="input-field" placeholder="e.g. 21BCE100" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Year *</label>
-                <input name="year" type="text" onChange={handleChange} required placeholder="e.g. 1st, 2nd, 3rd..." className="input-field" />
+                <select name="year" onChange={handleChange as any} required defaultValue="" className="input-field">
+                  <option value="" disabled>Select Year</option>
+                  <option value="1">1st Year</option>
+                  <option value="2">2nd Year</option>
+                  <option value="3">3rd Year</option>
+                  <option value="4">4th Year</option>
+                  <option value="Alumni">Alumni</option>
+                </select>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Branch *</label>
-                <input name="branch" type="text" onChange={handleChange} required placeholder="e.g. CSE, ECE..." className="input-field" />
+                <select name="branch" onChange={handleChange as any} required defaultValue="" className="input-field">
+                  <option value="" disabled>Select Branch</option>
+                  <option value="CSE">Computer Science (CSE)</option>
+                  <option value="IT">Information Technology (IT)</option>
+                  <option value="ECE">Electronics (ECE)</option>
+                  <option value="EE">Electrical (EE)</option>
+                  <option value="ME">Mechanical (ME)</option>
+                  <option value="CE">Civil (CE)</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Contact Number *</label>
-                <input name="contact_number" type="tel" onChange={handleChange} required className="input-field" />
+                <input name="contact_number" type="tel" onChange={handleChange} required pattern="^\d{10}$" title="Must be exactly 10 digits" className="input-field" placeholder="e.g. 9876543210" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Codeforces Handle *</label>
-                <input name="cf_handle" type="text" onChange={handleChange} required className="input-field" />
+                <input name="cf_handle" type="text" onChange={handleChange} required pattern="^[A-Za-z0-9_.-]+$" title="Username only (no spaces, URLs, or weird symbols)" className="input-field" placeholder="e.g. tourist" />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">LeetCode Handle *</label>
-                <input name="lc_handle" type="text" onChange={handleChange} required className="input-field" />
+                <input name="lc_handle" type="text" onChange={handleChange} required pattern="^[A-Za-z0-9_.-]+$" title="Username only (no spaces, URLs, or weird symbols)" className="input-field" placeholder="e.g. neetcode" />
               </div>
             </div>
 

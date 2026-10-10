@@ -210,10 +210,20 @@ export default function AdminDashboard() {
                 
                 const updates = otherUsers.map(u => {
                   let next = u.year;
-                  if (u.year === '1') next = '2';
-                  else if (u.year === '2') next = '3';
-                  else if (u.year === '3') next = '4';
-                  else if (u.year === '4') next = 'Alumni';
+                  const currentYearNum = parseInt(u.year.replace(/\D/g, ''), 10);
+                  
+                  if (u.year === 'Alumni') {
+                    next = 'Alumni';
+                  } else if (currentYearNum === 1 || u.year.startsWith('1')) {
+                    next = '2';
+                  } else if (currentYearNum === 2 || u.year.startsWith('2')) {
+                    next = '3';
+                  } else if (currentYearNum === 3 || u.year.startsWith('3')) {
+                    next = '4';
+                  } else if (currentYearNum === 4 || u.year.startsWith('4')) {
+                    next = 'Alumni';
+                  }
+
                   return { id: u.id, year: next };
                 }).filter(u => u.year !== otherUsers.find(o => o.id === u.id)?.year);
 

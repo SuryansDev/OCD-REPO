@@ -7,7 +7,23 @@ import Navbar from '@/components/Navbar';
 import PlatformBadge from '@/components/PlatformBadge';
 import Confetti from '@/components/Confetti';
 import type { UserProfile, Task } from '@/lib/types';
-import { Loader2, PlusCircle, CheckCircle, Code2, Link as LinkIcon, UserPlus, Clock, AlertCircle, X } from 'lucide-react';
+import { Loader2, PlusCircle, CheckCircle, Code2, Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink } from 'lucide-react';
+
+const getTaskLink = (task: any) => {
+  if (task.platform === 'LeetCode') {
+    return `https://leetcode.com/problems/${task.problem_slug_or_id}`;
+  } else if (task.platform === 'Codeforces') {
+    const match = task.problem_slug_or_id.match(/^(\d+)([A-Za-z]\d*)$/);
+    if (match) {
+      return `https://codeforces.com/problemset/problem/${match[1]}/${match[2]}`;
+    } else if (task.problem_slug_or_id.includes('/')) {
+      const parts = task.problem_slug_or_id.split('/');
+      return `https://codeforces.com/problemset/problem/${parts[0]}/${parts[1]}`;
+    }
+    return `https://codeforces.com/problemset/problem/${task.problem_slug_or_id}`;
+  }
+  return '#';
+};
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -292,7 +308,15 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
             <div className="p-5 border-b border-surface-100 flex justify-between items-center bg-surface-50">
               <div>
-                <h3 className="text-xl font-bold text-surface-900">{selectedTaskGroup.problem_slug_or_id}</h3>
+                <a 
+                  href={getTaskLink(selectedTaskGroup)} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-xl font-bold text-brand-600 hover:text-brand-800 transition-colors w-fit group"
+                >
+                  {selectedTaskGroup.problem_slug_or_id}
+                  <ExternalLink className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
                 <p className="text-xs font-semibold text-surface-500 mt-1 uppercase tracking-wider">{selectedTaskGroup.platform} &bull; Assigned {new Date(selectedTaskGroup.assigned_date).toLocaleDateString()}</p>
               </div>
               <button onClick={() => setSelectedTaskGroup(null)} className="p-2 text-surface-400 hover:text-surface-700 hover:bg-surface-200 rounded-lg transition-colors">
@@ -417,7 +441,15 @@ export default function Dashboard() {
                     </span>
                   </div>
                   
-                  <h3 className="font-bold text-surface-900 text-lg mb-1">{task.problem_slug_or_id}</h3>
+                  <a 
+                    href={getTaskLink(task)} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-2 font-bold text-brand-600 hover:text-brand-800 text-lg mb-1 transition-colors w-fit"
+                  >
+                    {task.problem_slug_or_id}
+                    <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </a>
                   <div className="flex-1" />
                   
                   <div className="mt-4 pt-4 border-t border-surface-100/50 flex items-center justify-between">
@@ -564,7 +596,19 @@ export default function Dashboard() {
                         onClick={() => setSelectedTaskGroup(group)}
                         className="flex items-center justify-between text-sm p-3 rounded-lg bg-white border border-brand-100 hover:border-brand-300 hover:shadow-sm cursor-pointer transition-all"
                       >
-                        <span className="font-bold text-surface-900">{group.problem_slug_or_id}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-surface-900">{group.problem_slug_or_id}</span>
+                          <a 
+                            href={getTaskLink(group)} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-surface-400 hover:text-brand-600 transition-colors"
+                            title="Open Problem Link"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
                         <div className="flex items-center gap-3">
                           <span className="text-xs font-semibold text-surface-500 bg-surface-50 px-2 py-1 rounded">{group.platform}</span>
                           <div className="flex items-center gap-1 text-xs font-bold text-surface-400">

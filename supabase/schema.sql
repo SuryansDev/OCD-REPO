@@ -100,7 +100,7 @@ CREATE POLICY "Admins can delete mentorships" ON public.mentorships FOR DELETE U
 ALTER TABLE public.mentorship_requests ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admins can view all mentorship requests" ON public.mentorship_requests FOR SELECT USING (public.is_admin());
 CREATE POLICY "Users can view own requests" ON public.mentorship_requests FOR SELECT USING (mentor_id = auth.uid() OR mentee_id = auth.uid());
-CREATE POLICY "Users can create mentorship requests" ON public.mentorship_requests FOR INSERT WITH CHECK (mentor_id = auth.uid());
+CREATE POLICY "Users can create mentorship requests" ON public.mentorship_requests FOR INSERT WITH CHECK (mentee_id = auth.uid() OR mentor_id = auth.uid());
 CREATE POLICY "Admins can update mentorship requests" ON public.mentorship_requests FOR UPDATE USING (public.is_admin());
 
 -- ── TASKS ───────────────────────────────────────────────────
