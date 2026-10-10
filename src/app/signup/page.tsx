@@ -31,7 +31,7 @@ export default function SignupPage() {
 
     const emailTrimmed = formData.email.trim().toLowerCase();
     if (!emailTrimmed.endsWith('@nitkkr.ac.in')) {
-      setError('Only college email IDs ending with @nitkkr.ac.in are allowed to register.');
+      setError('Only college email IDs ending with @nitkkr.ac.in are allowed to sign up.');
       setLoading(false);
       return;
     }
@@ -90,14 +90,14 @@ export default function SignupPage() {
                 <input name="full_name" type="text" onChange={handleChange} required minLength={2} className="input-field" placeholder="John Doe" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">College Email (@nitkkr.ac.in) *</label>
+                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">College Email ID *</label>
                 <input 
                   name="email" 
                   type="email" 
                   onChange={handleChange} 
                   required 
                   pattern=".+@nitkkr\.ac\.in$"
-                  title="Must be an official @nitkkr.ac.in email address"
+                  title="Must be an official @nitkkr.ac.in college email ID"
                   className="input-field" 
                   placeholder="yourname@nitkkr.ac.in" 
                 />
