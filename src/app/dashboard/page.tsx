@@ -7,7 +7,11 @@ import Navbar from '@/components/Navbar';
 import PlatformBadge from '@/components/PlatformBadge';
 import Confetti from '@/components/Confetti';
 import type { UserProfile, Task } from '@/lib/types';
-import { Loader2, PlusCircle, CheckCircle, Code2, Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink, Trophy, Flame, BarChart3, Award } from 'lucide-react';
+import { 
+  Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2, 
+  Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink, 
+  Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight 
+} from 'lucide-react';
 
 const getTaskLink = (task: any) => {
   if (task.platform === 'LeetCode') {
@@ -25,6 +29,16 @@ const getTaskLink = (task: any) => {
   return '#';
 };
 
+const formatProblemTitle = (slugOrId: string, platform: string) => {
+  if (platform === 'LeetCode') {
+    return slugOrId
+      .split('-')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
+  return slugOrId;
+};
+
 export default function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   
@@ -32,6 +46,7 @@ export default function Dashboard() {
   const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [taskPage, setTaskPage] = useState(1);
 
   // My mentor role state
   const [myMentees, setMyMentees] = useState<UserProfile[]>([]);
@@ -59,6 +74,7 @@ export default function Dashboard() {
     cf?: { id?: number; name?: string; relatedNames?: string[]; startTime?: string; totalContestParticipants?: number | null };
   }>({});
   const [leaderboardTab, setLeaderboardTab] = useState<'streak' | 'lc_rating' | 'cf_rating' | 'total_solved' | 'lc_contest' | 'cf_contest'>('streak');
+  const [leaderboardPage, setLeaderboardPage] = useState(1);
 
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -245,6 +261,98 @@ export default function Dashboard() {
     await supabase.from('users').update({ just_promoted: false }).eq('id', profile!.id);
   };
 
+  // Sort tasks: newest problem at the top
+  const sortedTasks = useMemo(() => {
+    return [...myTasks].sort((a, b) => {
+      const timeA = new Date(a.created_at || a.assigned_date).getTime();
+      const timeB = new Date(b.created_at || b.assigned_date).getTime();
+      return timeB - timeA;
+    });
+  }, [myTasks]);
+
+  const TASKS_PER_PAGE = 10;
+  const totalTaskPages = Math.max(1, Math.ceil(sortedTasks.length / TASKS_PER_PAGE));
+  const safeTaskPage = Math.min(Math.max(1, taskPage), totalTaskPages);
+  const paginatedTasks = sortedTasks.slice(
+    (safeTaskPage - 1) * TASKS_PER_PAGE,
+    safeTaskPage * TASKS_PER_PAGE
+  );
+
+  const completedCount = useMemo(() => {
+    return myTasks.filter((t) => t.status === 'Completed').length;
+  }, [myTasks]);
+
+  const handleTabChange = (tab: typeof leaderboardTab) => {
+    setLeaderboardTab(tab);
+    setLeaderboardPage(1);
+  };
+
+  // Sorted leaderboard entries based on active tab
+  const sortedLeaderboard = useMemo(() => {
+    let sorted = [...leaderboardData];
+
+    const targetLCName = latestContests.lc?.title || (
+      sorted
+        .filter((s) => s.lc_latest_contest_date)
+        .sort((a, b) => new Date(b.lc_latest_contest_date).getTime() - new Date(a.lc_latest_contest_date).getTime())[0]?.lc_latest_contest_name
+    ) || '';
+
+    const targetCFName = latestContests.cf?.name || (
+      sorted
+        .filter((s) => s.cf_latest_contest_date)
+        .sort((a, b) => new Date(b.cf_latest_contest_date).getTime() - new Date(a.cf_latest_contest_date).getTime())[0]?.cf_latest_contest_name
+    ) || '';
+
+    const targetCFNames = latestContests.cf?.relatedNames?.length
+      ? latestContests.cf.relatedNames
+      : (targetCFName ? [targetCFName] : []);
+
+    if (leaderboardTab === 'streak') {
+      sorted.sort((a, b) => (b.current_streak || 0) - (a.current_streak || 0));
+    } else if (leaderboardTab === 'lc_rating') {
+      sorted.sort((a, b) => (b.lc_rating || 0) - (a.lc_rating || 0));
+    } else if (leaderboardTab === 'cf_rating') {
+      sorted.sort((a, b) => (b.cf_rating || 0) - (a.cf_rating || 0));
+    } else if (leaderboardTab === 'total_solved') {
+      sorted.sort((a, b) => ((b.lc_total_solved || 0) + (b.cf_total_solved || 0)) - ((a.lc_total_solved || 0) + (a.cf_total_solved || 0)));
+    } else if (leaderboardTab === 'lc_contest') {
+      sorted = targetLCName ? sorted.filter((s) => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName) : [];
+      sorted.sort((a, b) => (a.lc_latest_contest_rank || 999999) - (b.lc_latest_contest_rank || 999999));
+    } else if (leaderboardTab === 'cf_contest') {
+      sorted = targetCFNames.length > 0 ? sorted.filter((s) => s.cf_latest_contest_name && targetCFNames.includes(s.cf_latest_contest_name)) : [];
+      sorted.sort((a, b) => (a.cf_latest_contest_rank || 999999) - (b.cf_latest_contest_rank || 999999));
+    }
+
+    return sorted;
+  }, [leaderboardData, leaderboardTab, latestContests]);
+
+  const LEADERBOARD_PER_PAGE = 10;
+  const totalLeaderboardPages = Math.max(1, Math.ceil(sortedLeaderboard.length / LEADERBOARD_PER_PAGE));
+  const safeLeaderboardPage = Math.min(Math.max(1, leaderboardPage), totalLeaderboardPages);
+  const paginatedLeaderboard = sortedLeaderboard.slice(
+    (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE,
+    safeLeaderboardPage * LEADERBOARD_PER_PAGE
+  );
+
+  const targetLCName = latestContests.lc?.title || (
+    leaderboardData
+      .filter((s) => s.lc_latest_contest_date)
+      .sort((a, b) => new Date(b.lc_latest_contest_date).getTime() - new Date(a.lc_latest_contest_date).getTime())[0]?.lc_latest_contest_name
+  ) || 'Latest Contest';
+
+  const targetCFName = latestContests.cf?.name || (
+    leaderboardData
+      .filter((s) => s.cf_latest_contest_date)
+      .sort((a, b) => new Date(b.cf_latest_contest_date).getTime() - new Date(a.cf_latest_contest_date).getTime())[0]?.cf_latest_contest_name
+  ) || 'Latest Contest';
+
+  const targetCFNames = latestContests.cf?.relatedNames?.length
+    ? latestContests.cf.relatedNames
+    : (targetCFName ? [targetCFName] : []);
+
+  const lcParticipantsCount = leaderboardData.filter((s) => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName).length;
+  const cfParticipantsCount = leaderboardData.filter((s) => s.cf_latest_contest_name && (targetCFNames.length > 0 ? targetCFNames.includes(s.cf_latest_contest_name) : s.cf_latest_contest_name === targetCFName)).length;
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-50">
@@ -416,80 +524,459 @@ export default function Dashboard() {
       )}
 
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
         
-        {/* --- MENTEE SECTION (My Assignments) --- */}
-        <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-brand-100 rounded-lg text-brand-600">
-                <Code2 className="w-5 h-5" />
-              </div>
-              <h2 className="text-2xl font-bold text-surface-900">My Assignments</h2>
-            </div>
-            
-            {myTasks.filter(t => t.status === 'Pending').length > 0 && (
-              <button 
-                onClick={handleSyncProgress}
-                disabled={syncing}
-                className="btn-primary shadow-brand-500/30 shadow-lg px-6"
-              >
-                {syncing ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                )}
-                {syncing ? 'Syncing...' : 'Sync Progress'}
-              </button>
-            )}
-          </div>
+        {/* --- TOP SECTION: MY ASSIGNMENTS (LEFT) & LEADERBOARD (RIGHT) --- */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {myTasks.length === 0 ? (
-              <div className="col-span-full card p-8 text-center text-surface-500 border-dashed border-2">
-                You have no pending assignments right now.
-              </div>
-            ) : (
-              myTasks.map((task) => (
-                <div key={task.id} className={`card p-5 flex flex-col transition-colors ${task.status === 'Completed' ? 'bg-emerald-50/50 border-emerald-100' : 'hover:border-brand-200'}`}>
-                  <div className="flex justify-between items-start mb-4">
-                    <PlatformBadge platform={task.platform as any} />
-                    <span className="text-xs font-semibold text-surface-400 bg-surface-100 px-2 py-1 rounded-md">
-                      {new Date(task.assigned_date).toLocaleDateString()}
-                    </span>
-                  </div>
-                  
-                  <a 
-                    href={getTaskLink(task)} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-2 font-bold text-brand-600 hover:text-brand-800 text-lg mb-1 transition-colors w-fit"
-                  >
-                    {task.problem_slug_or_id}
-                    <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </a>
-                  <div className="flex-1" />
-                  
-                  <div className="mt-4 pt-4 border-t border-surface-100/50 flex items-center justify-between">
-                    {task.status === 'Completed' ? (
-                      <span className="flex items-center gap-1.5 text-sm font-bold text-emerald-600">
-                        <CheckCircle className="w-5 h-5" /> Verified
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1.5 text-sm font-bold text-amber-500">
-                        <Clock className="w-4 h-4" /> Pending
-                      </span>
-                    )}
-                  </div>
+          {/* LEFT: MY ASSIGNMENTS */}
+          <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.1s' }}>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-brand-100 rounded-xl text-brand-600 shadow-sm shadow-brand-500/10">
+                  <Code2 className="w-5 h-5" />
                 </div>
-              ))
+                <div>
+                  <h2 className="text-xl font-bold text-surface-900">My Assignments</h2>
+                  <p className="text-xs text-surface-400 mt-0.5">
+                    {completedCount} of {myTasks.length} solved
+                  </p>
+                </div>
+              </div>
+              
+              {myTasks.filter(t => t.status === 'Pending').length > 0 && (
+                <button 
+                  onClick={handleSyncProgress}
+                  disabled={syncing}
+                  className="btn-primary py-1.5 px-3.5 text-xs shadow-md shadow-brand-500/20"
+                >
+                  {syncing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  {syncing ? 'Syncing...' : 'Sync Progress'}
+                </button>
+              )}
+            </div>
+
+            {/* LeetCode-style Problem Table */}
+            <div className="border border-surface-200 rounded-xl overflow-hidden bg-white">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-surface-100/80 text-surface-600 font-semibold uppercase text-[11px] tracking-wider border-b border-surface-200">
+                    <tr>
+                      <th className="py-2.5 px-3 w-10 text-center">Status</th>
+                      <th className="py-2.5 px-4">Problem</th>
+                      <th className="py-2.5 px-3 w-20 text-center">Platform</th>
+                      <th className="py-2.5 px-3 w-24 text-right">Assigned</th>
+                      <th className="py-2.5 px-4 w-24 text-right">State</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-200/80">
+                    {myTasks.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-12 text-center text-surface-400">
+                          <Code2 className="w-8 h-8 text-surface-300 mx-auto mb-2" />
+                          <p className="font-semibold text-surface-700 text-sm">No assignments assigned yet</p>
+                          <p className="text-xs text-surface-400 mt-1">When your mentor assigns questions, they will appear here.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedTasks.map((task) => (
+                        <tr key={task.id} className="hover:bg-surface-50/80 transition-colors group">
+                          {/* Solved / Unsolved Icon */}
+                          <td className="py-3 px-3 text-center">
+                            {task.status === 'Completed' ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                            ) : (
+                              <CircleDashed className="w-4 h-4 text-surface-300 mx-auto group-hover:text-amber-500 transition-colors" />
+                            )}
+                          </td>
+
+                          {/* Problem Title Link */}
+                          <td className="py-3 px-4">
+                            <a 
+                              href={getTaskLink(task)} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="font-semibold text-surface-900 group-hover:text-brand-600 inline-flex items-center gap-1.5 max-w-[200px] sm:max-w-[260px] truncate transition-colors"
+                              title={task.problem_slug_or_id}
+                            >
+                              <span className="truncate">{formatProblemTitle(task.problem_slug_or_id, task.platform)}</span>
+                              <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-brand-500 shrink-0 transition-opacity" />
+                            </a>
+                          </td>
+
+                          {/* Platform Pill */}
+                          <td className="py-3 px-3 text-center">
+                            {task.platform === 'LeetCode' ? (
+                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+                                LC
+                              </span>
+                            ) : (
+                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80">
+                                CF
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Assigned Date */}
+                          <td className="py-3 px-3 text-right text-xs text-surface-400 whitespace-nowrap">
+                            {new Date(task.assigned_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          </td>
+
+                          {/* State Pill */}
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            {task.status === 'Completed' ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                <CheckCircle className="w-3 h-3" /> Solved
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                <Clock className="w-3 h-3" /> Pending
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Slider / Pagination Footer */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 border-t border-surface-200">
+                <span className="text-xs text-surface-500 font-medium order-2 sm:order-1">
+                  Showing {sortedTasks.length === 0 ? 0 : (safeTaskPage - 1) * TASKS_PER_PAGE + 1}–{Math.min(safeTaskPage * TASKS_PER_PAGE, sortedTasks.length)} of {sortedTasks.length} questions
+                </span>
+
+                <div className="flex items-center gap-2 order-1 sm:order-2">
+                  <button 
+                    onClick={() => setTaskPage(p => Math.max(1, p - 1))} 
+                    disabled={safeTaskPage <= 1}
+                    className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                    title="Previous page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max={totalTaskPages} 
+                    value={safeTaskPage} 
+                    onChange={(e) => setTaskPage(Number(e.target.value))}
+                    disabled={totalTaskPages <= 1}
+                    className="w-20 accent-brand-600 h-1.5 bg-surface-200 rounded-lg cursor-pointer disabled:opacity-40"
+                    title="Slide through questions"
+                  />
+
+                  <span className="text-xs font-semibold text-surface-700 min-w-[50px] text-center">
+                    {safeTaskPage} / {totalTaskPages}
+                  </span>
+
+                  <button 
+                    onClick={() => setTaskPage(p => Math.min(totalTaskPages, p + 1))} 
+                    disabled={safeTaskPage >= totalTaskPages}
+                    className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                    title="Next page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: LEADERBOARD */}
+          <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.2s' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600 shadow-sm shadow-amber-500/10">
+                  <Trophy className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-surface-900">Leaderboard</h2>
+                  <p className="text-xs text-surface-400 mt-0.5">
+                    {sortedLeaderboard.length} participants ranked
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Leaderboard Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none mb-3">
+              {([
+                { key: 'streak', label: '🔥 Streak', icon: Flame },
+                { key: 'lc_rating', label: 'LC Rating', icon: BarChart3 },
+                { key: 'cf_rating', label: 'CF Rating', icon: BarChart3 },
+                { key: 'total_solved', label: 'Total Solved', icon: Award },
+                { key: 'lc_contest', label: 'LC Contest', icon: Trophy },
+                { key: 'cf_contest', label: 'CF Contest', icon: Trophy },
+              ] as const).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                    leaderboardTab === tab.key
+                      ? 'bg-brand-600 text-white shadow-md shadow-brand-500/30'
+                      : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Contest Info Banner (when on LC Contest or CF Contest tabs) */}
+            {leaderboardTab === 'lc_contest' && (
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-xl p-3 mb-3 flex items-center justify-between gap-2 shadow-sm text-xs">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded">
+                    LeetCode Contest
+                  </span>
+                  <h4 className="font-bold text-surface-900 truncate mt-1">{targetLCName}</h4>
+                </div>
+                <div className="bg-white/90 border border-amber-200/60 rounded-lg px-2.5 py-1 text-right shrink-0">
+                  <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
+                  <div className="text-sm font-black text-amber-600">{lcParticipantsCount} members</div>
+                </div>
+              </div>
             )}
+
+            {leaderboardTab === 'cf_contest' && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl p-3 mb-3 flex items-center justify-between gap-2 shadow-sm text-xs">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded">
+                    Codeforces Contest
+                  </span>
+                  <h4 className="font-bold text-surface-900 truncate mt-1">{targetCFName}</h4>
+                </div>
+                <div className="bg-white/90 border border-blue-200/60 rounded-lg px-2.5 py-1 text-right shrink-0">
+                  <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
+                  <div className="text-sm font-black text-blue-600">{cfParticipantsCount} members</div>
+                </div>
+              </div>
+            )}
+
+            {/* Leaderboard Table with 10 participants at a time */}
+            <div className="border border-surface-200 rounded-xl overflow-hidden bg-white">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-surface-100/80 text-surface-600 font-semibold uppercase text-[11px] tracking-wider border-b border-surface-200">
+                    <tr>
+                      <th className="py-2.5 px-3 w-10 text-center">#</th>
+                      <th className="py-2.5 px-3">Name</th>
+                      <th className="py-2.5 px-2 w-12 text-center">Year</th>
+                      {leaderboardTab === 'streak' && (
+                        <>
+                          <th className="py-2.5 px-3 text-right">Streak</th>
+                          <th className="py-2.5 px-3 text-right">Max</th>
+                        </>
+                      )}
+                      {leaderboardTab === 'lc_rating' && (
+                        <th className="py-2.5 px-3 text-right">LC Rating</th>
+                      )}
+                      {leaderboardTab === 'cf_rating' && (
+                        <>
+                          <th className="py-2.5 px-3 text-right">CF Rating</th>
+                          <th className="py-2.5 px-3 text-right">Max</th>
+                        </>
+                      )}
+                      {leaderboardTab === 'total_solved' && (
+                        <>
+                          <th className="py-2.5 px-2 text-right">LC</th>
+                          <th className="py-2.5 px-2 text-right">CF</th>
+                          <th className="py-2.5 px-3 text-right">Total</th>
+                        </>
+                      )}
+                      {leaderboardTab === 'lc_contest' && (
+                        <>
+                          <th className="py-2.5 px-3">Contest</th>
+                          <th className="py-2.5 px-3 text-right">Rank</th>
+                          <th className="py-2.5 px-3 text-right">Solved</th>
+                        </>
+                      )}
+                      {leaderboardTab === 'cf_contest' && (
+                        <>
+                          <th className="py-2.5 px-3">Contest</th>
+                          <th className="py-2.5 px-3 text-right">Rank</th>
+                          <th className="py-2.5 px-3 text-right">Rating</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-200/80">
+                    {sortedLeaderboard.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-12 text-center text-surface-400">
+                          <Trophy className="w-8 h-8 text-surface-300 mx-auto mb-2" />
+                          <p className="font-semibold text-surface-700 text-sm">No leaderboard data found</p>
+                          <p className="text-xs text-surface-400 mt-1">
+                            {leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest' 
+                              ? 'No participants in this contest yet.' 
+                              : 'Rankings will appear once synced.'}
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedLeaderboard.map((entry, index) => {
+                        const actualRank = (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + index;
+                        const isMe = entry.user_id === profile?.id;
+                        return (
+                          <tr 
+                            key={entry.user_id} 
+                            className={`hover:bg-surface-50 transition-colors ${isMe ? 'bg-brand-50/50 font-semibold' : ''}`}
+                          >
+                            <td className="py-2.5 px-3 text-center text-xs">
+                              {actualRank === 0 ? '🥇' : actualRank === 1 ? '🥈' : actualRank === 2 ? '🥉' : (
+                                <span className="text-surface-400 font-bold">{actualRank + 1}</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 font-medium text-surface-900 truncate max-w-[140px]">
+                              {entry.user?.full_name}
+                              {isMe && (
+                                <span className="ml-1.5 text-[9px] font-bold bg-brand-100 text-brand-700 px-1 py-0.2 rounded">YOU</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2 text-center text-xs text-surface-500">
+                              {entry.user?.year === 'Alumni' ? '🎓' : entry.user?.year}
+                            </td>
+                            
+                            {leaderboardTab === 'streak' && (
+                              <>
+                                <td className="py-2.5 px-3 text-right">
+                                  <span className={`font-bold ${(entry.current_streak || 0) > 0 ? 'text-orange-600' : 'text-surface-400'}`}>
+                                    {entry.current_streak || 0} {(entry.current_streak || 0) > 0 ? '🔥' : ''}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-bold text-surface-400 text-xs">
+                                  {entry.max_streak || 0}
+                                </td>
+                              </>
+                            )}
+
+                            {leaderboardTab === 'lc_rating' && (
+                              <td className="py-2.5 px-3 text-right font-bold text-amber-600">
+                                {entry.lc_rating ? Math.round(entry.lc_rating) : '—'}
+                              </td>
+                            )}
+
+                            {leaderboardTab === 'cf_rating' && (
+                              <>
+                                <td className="py-2.5 px-3 text-right font-bold text-blue-600">
+                                  {entry.cf_rating || '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-bold text-surface-400 text-xs">
+                                  {entry.cf_max_rating || '—'}
+                                </td>
+                              </>
+                            )}
+
+                            {leaderboardTab === 'total_solved' && (
+                              <>
+                                <td className="py-2.5 px-2 text-right font-semibold text-amber-600 text-xs">
+                                  {entry.lc_total_solved || 0}
+                                </td>
+                                <td className="py-2.5 px-2 text-right font-semibold text-blue-600 text-xs">
+                                  {entry.cf_total_solved || 0}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-black text-emerald-600">
+                                  {(entry.lc_total_solved || 0) + (entry.cf_total_solved || 0)}
+                                </td>
+                              </>
+                            )}
+
+                            {leaderboardTab === 'lc_contest' && (
+                              <>
+                                <td className="py-2.5 px-3 text-xs text-surface-600 max-w-[120px] truncate" title={entry.lc_latest_contest_name}>
+                                  {entry.lc_latest_contest_name || '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-bold text-amber-600 text-xs">
+                                  {entry.lc_latest_contest_rank?.toLocaleString() || '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-bold text-emerald-600 text-xs">
+                                  {entry.lc_latest_contest_solved ?? '—'}
+                                </td>
+                              </>
+                            )}
+
+                            {leaderboardTab === 'cf_contest' && (
+                              <>
+                                <td className="py-2.5 px-3 text-xs text-surface-600 max-w-[120px] truncate" title={entry.cf_latest_contest_name}>
+                                  {entry.cf_latest_contest_name || '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-bold text-blue-600 text-xs">
+                                  {entry.cf_latest_contest_rank?.toLocaleString() || '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-bold text-emerald-600 text-xs">
+                                  {entry.cf_latest_contest_rating || '—'}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Slider / Pagination Footer for Leaderboard */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 border-t border-surface-200">
+                <span className="text-xs text-surface-500 font-medium order-2 sm:order-1">
+                  Showing {sortedLeaderboard.length === 0 ? 0 : (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + 1}–{Math.min(safeLeaderboardPage * LEADERBOARD_PER_PAGE, sortedLeaderboard.length)} of {sortedLeaderboard.length} participants
+                </span>
+
+                <div className="flex items-center gap-2 order-1 sm:order-2">
+                  <button 
+                    onClick={() => setLeaderboardPage(p => Math.max(1, p - 1))} 
+                    disabled={safeLeaderboardPage <= 1}
+                    className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                    title="Previous page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max={totalLeaderboardPages} 
+                    value={safeLeaderboardPage} 
+                    onChange={(e) => setLeaderboardPage(Number(e.target.value))}
+                    disabled={totalLeaderboardPages <= 1}
+                    className="w-20 accent-brand-600 h-1.5 bg-surface-200 rounded-lg cursor-pointer disabled:opacity-40"
+                    title="Slide through participants"
+                  />
+
+                  <span className="text-xs font-semibold text-surface-700 min-w-[50px] text-center">
+                    {safeLeaderboardPage} / {totalLeaderboardPages}
+                  </span>
+
+                  <button 
+                    onClick={() => setLeaderboardPage(p => Math.min(totalLeaderboardPages, p + 1))} 
+                    disabled={safeLeaderboardPage >= totalLeaderboardPages}
+                    className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                    title="Next page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {leaderboardData[0]?.synced_at && (
+                <div className="px-4 py-2 bg-surface-50/50 text-[11px] text-surface-400 border-t border-surface-100 flex items-center justify-between">
+                  <span>Last synced: {new Date(leaderboardData[0].synced_at).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
 
-        {/* --- MENTOR SECTION (My Mentees & Assigning) --- */}
-        <section className="animate-fade-in pt-8 border-t border-surface-200" style={{ animationDelay: '0.2s' }}>
+        {/* --- BOTTOM SECTION: MENTORSHIP MANAGEMENT (As earlier) --- */}
+        <section className="animate-fade-in pt-8 border-t border-surface-200" style={{ animationDelay: '0.3s' }}>
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
               <UserPlus className="w-5 h-5" />
@@ -644,319 +1131,6 @@ export default function Dashboard() {
 
           </div>
         </section>
-
-        {/* --- LEADERBOARD SECTION --- */}
-        {leaderboardData.length > 0 && (
-          <section className="animate-fade-in pt-8 border-t border-surface-200" style={{ animationDelay: '0.3s' }}>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
-                <Trophy className="w-5 h-5" />
-              </div>
-              <h2 className="text-2xl font-bold text-surface-900">Leaderboard</h2>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex flex-wrap gap-2 mb-6">
-              {([
-                { key: 'streak', label: '🔥 Streak', icon: Flame },
-                { key: 'lc_rating', label: 'LC Rating', icon: BarChart3 },
-                { key: 'cf_rating', label: 'CF Rating', icon: BarChart3 },
-                { key: 'total_solved', label: 'Total Solved', icon: Award },
-                { key: 'lc_contest', label: 'LC Contest', icon: Trophy },
-                { key: 'cf_contest', label: 'CF Contest', icon: Trophy },
-              ] as const).map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setLeaderboardTab(tab.key)}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                    leaderboardTab === tab.key
-                      ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30'
-                      : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Contest Info Banner (when on LC Contest or CF Contest tabs) */}
-            {(() => {
-              const targetLCName = latestContests.lc?.title || (
-                leaderboardData
-                  .filter(s => s.lc_latest_contest_date)
-                  .sort((a, b) => new Date(b.lc_latest_contest_date).getTime() - new Date(a.lc_latest_contest_date).getTime())[0]?.lc_latest_contest_name
-              ) || 'Latest Contest';
-
-              const targetCFName = latestContests.cf?.name || (
-                leaderboardData
-                  .filter(s => s.cf_latest_contest_date)
-                  .sort((a, b) => new Date(b.cf_latest_contest_date).getTime() - new Date(a.cf_latest_contest_date).getTime())[0]?.cf_latest_contest_name
-              ) || 'Latest Contest';
-
-              const targetCFNames = latestContests.cf?.relatedNames?.length
-                ? latestContests.cf.relatedNames
-                : (targetCFName ? [targetCFName] : []);
-
-              const lcParticipantsCount = leaderboardData.filter(s => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName).length;
-              const cfParticipantsCount = leaderboardData.filter(s => s.cf_latest_contest_name && (targetCFNames.length > 0 ? targetCFNames.includes(s.cf_latest_contest_name) : s.cf_latest_contest_name === targetCFName)).length;
-
-              if (leaderboardTab === 'lc_contest') {
-                return (
-                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-amber-500 text-white rounded-xl shadow-md shadow-amber-500/20">
-                        <Trophy className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md">
-                            Latest LeetCode Contest
-                          </span>
-                          {latestContests.lc?.startTime && (
-                            <span className="text-xs text-amber-700">
-                              • Held on {new Date(latestContests.lc.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-lg font-bold text-surface-900 mt-0.5">
-                          {targetLCName}
-                        </h3>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 self-end sm:self-auto bg-white/80 backdrop-blur-sm border border-amber-200/60 rounded-xl px-4 py-2">
-                      <div>
-                        <div className="text-[10px] font-bold uppercase text-surface-400">Total Participants</div>
-                        <div className="text-xl font-black text-amber-600">
-                          {lcParticipantsCount} <span className="text-xs font-medium text-surface-500">members</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              if (leaderboardTab === 'cf_contest') {
-                return (
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/20">
-                        <Trophy className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">
-                            Latest Codeforces Contest
-                          </span>
-                          {latestContests.cf?.startTime && (
-                            <span className="text-xs text-blue-700">
-                              • Held on {new Date(latestContests.cf.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-lg font-bold text-surface-900 mt-0.5">
-                          {targetCFName}
-                        </h3>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 self-end sm:self-auto bg-white/80 backdrop-blur-sm border border-blue-200/60 rounded-xl px-4 py-2">
-                      <div>
-                        <div className="text-[10px] font-bold uppercase text-surface-400">Total Participants</div>
-                        <div className="text-xl font-black text-blue-600">
-                          {cfParticipantsCount} <span className="text-xs font-medium text-surface-500">members</span>
-                        </div>
-                      </div>
-                      {latestContests.cf?.totalContestParticipants && (
-                        <div className="border-l border-surface-200 pl-4">
-                          <div className="text-[10px] font-bold uppercase text-surface-400">Global Turnout</div>
-                          <div className="text-sm font-bold text-surface-700">
-                            {latestContests.cf.totalContestParticipants.toLocaleString()}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-
-              return null;
-            })()}
-
-            {/* Rankings Table */}
-            <div className="card overflow-hidden">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-surface-100 text-surface-600 font-semibold uppercase text-xs">
-                  <tr>
-                    <th className="px-4 py-3 w-12">#</th>
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Year</th>
-                    {leaderboardTab === 'streak' && (
-                      <>
-                        <th className="px-4 py-3 text-right">Current Streak</th>
-                        <th className="px-4 py-3 text-right">Max Streak</th>
-                      </>
-                    )}
-                    {leaderboardTab === 'lc_rating' && (
-                      <th className="px-4 py-3 text-right">LeetCode Rating</th>
-                    )}
-                    {leaderboardTab === 'cf_rating' && (
-                      <>
-                        <th className="px-4 py-3 text-right">CF Rating</th>
-                        <th className="px-4 py-3 text-right">Max Rating</th>
-                      </>
-                    )}
-                    {leaderboardTab === 'total_solved' && (
-                      <>
-                        <th className="px-4 py-3 text-right">LC Solved</th>
-                        <th className="px-4 py-3 text-right">CF Solved</th>
-                        <th className="px-4 py-3 text-right">Total</th>
-                      </>
-                    )}
-                    {leaderboardTab === 'lc_contest' && (
-                      <>
-                        <th className="px-4 py-3">Contest</th>
-                        <th className="px-4 py-3 text-right">Rank</th>
-                        <th className="px-4 py-3 text-right">Solved</th>
-                      </>
-                    )}
-                    {leaderboardTab === 'cf_contest' && (
-                      <>
-                        <th className="px-4 py-3">Contest</th>
-                        <th className="px-4 py-3 text-right">Rank</th>
-                        <th className="px-4 py-3 text-right">New Rating</th>
-                      </>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-200">
-                  {(() => {
-                    let sorted = [...leaderboardData];
-
-                    const targetLCName = latestContests.lc?.title || (
-                      sorted
-                        .filter(s => s.lc_latest_contest_date)
-                        .sort((a, b) => new Date(b.lc_latest_contest_date).getTime() - new Date(a.lc_latest_contest_date).getTime())[0]?.lc_latest_contest_name
-                    ) || '';
-
-                    const targetCFName = latestContests.cf?.name || (
-                      sorted
-                        .filter(s => s.cf_latest_contest_date)
-                        .sort((a, b) => new Date(b.cf_latest_contest_date).getTime() - new Date(a.cf_latest_contest_date).getTime())[0]?.cf_latest_contest_name
-                    ) || '';
-
-                    const targetCFNames = latestContests.cf?.relatedNames?.length
-                      ? latestContests.cf.relatedNames
-                      : (targetCFName ? [targetCFName] : []);
-                    
-                    if (leaderboardTab === 'streak') {
-                      sorted.sort((a, b) => (b.current_streak || 0) - (a.current_streak || 0));
-                    } else if (leaderboardTab === 'lc_rating') {
-                      sorted.sort((a, b) => (b.lc_rating || 0) - (a.lc_rating || 0));
-                    } else if (leaderboardTab === 'cf_rating') {
-                      sorted.sort((a, b) => (b.cf_rating || 0) - (a.cf_rating || 0));
-                    } else if (leaderboardTab === 'total_solved') {
-                      sorted.sort((a, b) => ((b.lc_total_solved || 0) + (b.cf_total_solved || 0)) - ((a.lc_total_solved || 0) + (a.cf_total_solved || 0)));
-                    } else if (leaderboardTab === 'lc_contest') {
-                      sorted = targetLCName ? sorted.filter(s => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName) : [];
-                      sorted.sort((a, b) => (a.lc_latest_contest_rank || 999999) - (b.lc_latest_contest_rank || 999999));
-                    } else if (leaderboardTab === 'cf_contest') {
-                      sorted = targetCFNames.length > 0 ? sorted.filter(s => s.cf_latest_contest_name && targetCFNames.includes(s.cf_latest_contest_name)) : [];
-                      sorted.sort((a, b) => (a.cf_latest_contest_rank || 999999) - (b.cf_latest_contest_rank || 999999));
-                    }
-
-                    if ((leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest') && sorted.length === 0) {
-                      return (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-12 text-center">
-                            <div className="max-w-sm mx-auto text-center">
-                              <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 ${
-                                leaderboardTab === 'lc_contest' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
-                              }`}>
-                                <Trophy className="w-6 h-6" />
-                              </div>
-                              <p className="font-bold text-surface-800 text-base">
-                                No members participated in {leaderboardTab === 'lc_contest' ? (targetLCName || 'the latest contest') : (targetCFName || 'the latest contest')}
-                              </p>
-                              <p className="text-xs text-surface-500 mt-1.5">
-                                Total participants: 0. Members who participate in this contest will appear here automatically after sync.
-                              </p>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return sorted.map((entry, index) => (
-                      <tr key={entry.user_id} className={`hover:bg-surface-50 ${entry.user_id === profile?.id ? 'bg-brand-50/50 font-semibold' : ''}`}>
-                        <td className="px-4 py-3">
-                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (
-                            <span className="text-surface-400 font-bold">{index + 1}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-surface-900">
-                          {entry.user?.full_name}
-                          {entry.user_id === profile?.id && (
-                            <span className="ml-2 text-[10px] font-bold bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded">YOU</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-surface-500">{entry.user?.year === 'Alumni' ? '🎓' : entry.user?.year}</td>
-                        
-                        {leaderboardTab === 'streak' && (
-                          <>
-                            <td className="px-4 py-3 text-right">
-                              <span className={`font-bold ${(entry.current_streak || 0) > 0 ? 'text-orange-600' : 'text-surface-400'}`}>
-                                {entry.current_streak || 0} {(entry.current_streak || 0) > 0 ? '🔥' : ''}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right font-bold text-surface-500">{entry.max_streak || 0}</td>
-                          </>
-                        )}
-                        {leaderboardTab === 'lc_rating' && (
-                          <td className="px-4 py-3 text-right font-bold text-amber-600">
-                            {entry.lc_rating ? Math.round(entry.lc_rating) : '—'}
-                          </td>
-                        )}
-                        {leaderboardTab === 'cf_rating' && (
-                          <>
-                            <td className="px-4 py-3 text-right font-bold text-blue-600">{entry.cf_rating || '—'}</td>
-                            <td className="px-4 py-3 text-right font-bold text-surface-500">{entry.cf_max_rating || '—'}</td>
-                          </>
-                        )}
-                        {leaderboardTab === 'total_solved' && (
-                          <>
-                            <td className="px-4 py-3 text-right font-bold text-amber-600">{entry.lc_total_solved || 0}</td>
-                            <td className="px-4 py-3 text-right font-bold text-blue-600">{entry.cf_total_solved || 0}</td>
-                            <td className="px-4 py-3 text-right font-black text-emerald-600">{(entry.lc_total_solved || 0) + (entry.cf_total_solved || 0)}</td>
-                          </>
-                        )}
-                        {leaderboardTab === 'lc_contest' && (
-                          <>
-                            <td className="px-4 py-3 text-xs text-surface-600 max-w-[200px] truncate">{entry.lc_latest_contest_name || '—'}</td>
-                            <td className="px-4 py-3 text-right font-bold text-amber-600">{entry.lc_latest_contest_rank?.toLocaleString() || '—'}</td>
-                            <td className="px-4 py-3 text-right font-bold text-emerald-600">{entry.lc_latest_contest_solved ?? '—'}</td>
-                          </>
-                        )}
-                        {leaderboardTab === 'cf_contest' && (
-                          <>
-                            <td className="px-4 py-3 text-xs text-surface-600 max-w-[200px] truncate">{entry.cf_latest_contest_name || '—'}</td>
-                            <td className="px-4 py-3 text-right font-bold text-blue-600">{entry.cf_latest_contest_rank?.toLocaleString() || '—'}</td>
-                            <td className="px-4 py-3 text-right font-bold text-emerald-600">{entry.cf_latest_contest_rating || '—'}</td>
-                          </>
-                        )}
-                      </tr>
-                    ));
-                  })()}
-                </tbody>
-              </table>
-              
-              {/* Last synced */}
-              {leaderboardData[0]?.synced_at && (
-                <div className="px-4 py-3 bg-surface-50 text-xs text-surface-400 border-t border-surface-100">
-                  Last synced: {new Date(leaderboardData[0].synced_at).toLocaleString()}
-                </div>
-              )}
-            </div>
-          </section>
-        )}
 
       </main>
     </div>
