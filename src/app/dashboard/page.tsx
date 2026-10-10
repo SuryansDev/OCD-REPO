@@ -14,7 +14,7 @@ export default function Dashboard() {
   
   // My mentee role state
   const [myTasks, setMyTasks] = useState<Task[]>([]);
-  const [verifying, setVerifying] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
 
   // My mentor role state
@@ -141,26 +141,25 @@ export default function Dashboard() {
   }, [myMentees, menteeAllTasks]);
 
 
-  const handleVerify = async (task: Task) => {
-    setVerifying(task.id);
+  const handleSyncProgress = async () => {
+    setSyncing(true);
     try {
       const res = await fetch('/api/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: task.id }),
       });
       const data = await res.json();
-      if (res.ok && data.verified) {
+      if (res.ok && data.verifiedCount > 0) {
         setShowConfetti(true);
         fetchData();
         setTimeout(() => setShowConfetti(false), 5000);
+        alert(data.message);
       } else {
-        alert(data.error || 'Not verified yet. Keep trying!');
+        alert(data.message || 'No new verified submissions found.');
       }
     } catch (e) {
-      alert('Verification failed. Try again.');
+      alert('Verification sync failed. Try again.');
     }
-    setVerifying(null);
+    setSyncing(false);
   };
 
   const handleAssignTask = async (e: React.FormEvent) => {
@@ -379,11 +378,28 @@ export default function Dashboard() {
         
         {/* --- MENTEE SECTION (My Assignments) --- */}
         <section className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-brand-100 rounded-lg text-brand-600">
-              <Code2 className="w-5 h-5" />
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-brand-100 rounded-lg text-brand-600">
+                <Code2 className="w-5 h-5" />
+              </div>
+              <h2 className="text-2xl font-bold text-surface-900">My Assignments</h2>
             </div>
-            <h2 className="text-2xl font-bold text-surface-900">My Assignments</h2>
+            
+            {myTasks.filter(t => t.status === 'Pending').length > 0 && (
+              <button 
+                onClick={handleSyncProgress}
+                disabled={syncing}
+                className="btn-primary shadow-brand-500/30 shadow-lg px-6"
+              >
+                {syncing ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                )}
+                {syncing ? 'Syncing...' : 'Sync Progress'}
+              </button>
+            )}
           </div>
           
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -393,7 +409,7 @@ export default function Dashboard() {
               </div>
             ) : (
               myTasks.map((task) => (
-                <div key={task.id} className="card p-5 flex flex-col hover:border-brand-200 transition-colors">
+                <div key={task.id} className={`card p-5 flex flex-col transition-colors ${task.status === 'Completed' ? 'bg-emerald-50/50 border-emerald-100' : 'hover:border-brand-200'}`}>
                   <div className="flex justify-between items-start mb-4">
                     <PlatformBadge platform={task.platform as any} />
                     <span className="text-xs font-semibold text-surface-400 bg-surface-100 px-2 py-1 rounded-md">
@@ -404,23 +420,15 @@ export default function Dashboard() {
                   <h3 className="font-bold text-surface-900 text-lg mb-1">{task.problem_slug_or_id}</h3>
                   <div className="flex-1" />
                   
-                  <div className="mt-6 pt-4 border-t border-surface-100 flex items-center justify-between">
+                  <div className="mt-4 pt-4 border-t border-surface-100/50 flex items-center justify-between">
                     {task.status === 'Completed' ? (
                       <span className="flex items-center gap-1.5 text-sm font-bold text-emerald-600">
                         <CheckCircle className="w-5 h-5" /> Verified
                       </span>
                     ) : (
-                      <button
-                        onClick={() => handleVerify(task)}
-                        disabled={verifying === task.id}
-                        className="btn-primary py-2 text-sm w-full"
-                      >
-                        {verifying === task.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          'Verify Solution'
-                        )}
-                      </button>
+                      <span className="flex items-center gap-1.5 text-sm font-bold text-amber-500">
+                        <Clock className="w-4 h-4" /> Pending
+                      </span>
                     )}
                   </div>
                 </div>

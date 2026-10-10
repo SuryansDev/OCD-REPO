@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 
 // Helper to create supabase client from route handler
 function createRouteHandlerClient(request: NextRequest) {
@@ -27,30 +27,31 @@ function createRouteHandlerClient(request: NextRequest) {
   );
 }
 
+// ─── Normalization Helpers ─────────────────────────────────
+function normalizeCF(problemId: string): string {
+  if (problemId.includes('/')) {
+    const parts = problemId.split('/');
+    return `${parts[0].trim()}/${parts[1].trim().toUpperCase()}`;
+  }
+  const match = problemId.match(/^(\d+)([A-Za-z]\d*)$/);
+  if (match) return `${match[1]}/${match[2].toUpperCase()}`;
+  return problemId.toUpperCase();
+}
+
+function normalizeLC(slug: string): string {
+  return slug
+    .toLowerCase()
+    .trim()
+    .replace(/^https?:\/\/leetcode\.com\/problems\//, '')
+    .replace(/\/$/, '');
+}
+
 // ─── Codeforces verification ────────────────────────────────
-async function verifyCodeforces(cfHandleInput: string, problemId: string): Promise<boolean> {
-  // Normalize cfHandle just in case they provided a profile URL
+async function getCodeforcesAC(cfHandleInput: string): Promise<Set<string>> {
   let cfHandle = cfHandleInput.trim();
   if (cfHandle.includes('codeforces.com/profile/')) {
     const match = cfHandle.match(/profile\/([^\/]+)/);
     if (match) cfHandle = match[1];
-  }
-  
-  // problemId format: "contestId/problemIndex" e.g. "1920/A" or just "1920A"
-  // Normalize: accept "1920/A", "1920A", "1920/a"
-  let contestId: string;
-  let problemIndex: string;
-
-  if (problemId.includes('/')) {
-    const parts = problemId.split('/');
-    contestId = parts[0].trim();
-    problemIndex = parts[1].trim().toUpperCase();
-  } else {
-    // e.g. "1920A" — split at the boundary between digits and letters
-    const match = problemId.match(/^(\d+)([A-Za-z]\d*)$/);
-    if (!match) return false;
-    contestId = match[1];
-    problemIndex = match[2].toUpperCase();
   }
 
   try {
@@ -59,38 +60,30 @@ async function verifyCodeforces(cfHandleInput: string, problemId: string): Promi
       { next: { revalidate: 0 } }
     );
 
-    if (!res.ok) return false;
+    if (!res.ok) return new Set();
 
     const data = await res.json();
-    if (data.status !== 'OK') return false;
+    if (data.status !== 'OK') return new Set();
 
-    // Check if any submission matches and has verdict OK
-    return data.result.some(
-      (sub: any) =>
-        sub.verdict === 'OK' &&
-        String(sub.problem.contestId) === contestId &&
-        sub.problem.index.toUpperCase() === problemIndex
-    );
+    const solved = new Set<string>();
+    data.result.forEach((sub: any) => {
+      if (sub.verdict === 'OK' && sub.problem?.contestId && sub.problem?.index) {
+        solved.add(`${sub.problem.contestId}/${sub.problem.index.toUpperCase()}`);
+      }
+    });
+    return solved;
   } catch {
-    return false;
+    return new Set();
   }
 }
 
 // ─── LeetCode verification ─────────────────────────────────
-async function verifyLeetCode(lcHandleInput: string, titleSlug: string): Promise<boolean> {
-  // Normalize lcHandle just in case they provided a profile URL
+async function getLeetCodeAC(lcHandleInput: string): Promise<Set<string>> {
   let lcHandle = lcHandleInput.trim();
   if (lcHandle.includes('leetcode.com/')) {
     const match = lcHandle.match(/leetcode\.com\/(?:u\/)?([^\/]+)/);
     if (match) lcHandle = match[1];
   }
-
-  // Normalize the slug
-  const normalizedSlug = titleSlug
-    .toLowerCase()
-    .trim()
-    .replace(/^https?:\/\/leetcode\.com\/problems\//, '')
-    .replace(/\/$/, '');
 
   try {
     const res = await fetch('https://leetcode.com/graphql', {
@@ -101,29 +94,27 @@ async function verifyLeetCode(lcHandleInput: string, titleSlug: string): Promise
           query recentAcSubmissionList($username: String!, $limit: Int!) {
             recentAcSubmissionList(username: $username, limit: $limit) {
               titleSlug
-              timestamp
             }
           }
         `,
-        variables: {
-          username: lcHandle,
-          limit: 50,
-        },
+        variables: { username: lcHandle, limit: 100 },
       }),
       next: { revalidate: 0 },
     });
 
-    if (!res.ok) return false;
+    if (!res.ok) return new Set();
 
     const data = await res.json();
     const submissions = data?.data?.recentAcSubmissionList;
-    if (!Array.isArray(submissions)) return false;
+    if (!Array.isArray(submissions)) return new Set();
 
-    return submissions.some(
-      (sub: any) => sub.titleSlug.toLowerCase() === normalizedSlug
-    );
+    const solved = new Set<string>();
+    submissions.forEach((sub: any) => {
+      solved.add(sub.titleSlug.toLowerCase());
+    });
+    return solved;
   } catch {
-    return false;
+    return new Set();
   }
 }
 
@@ -137,27 +128,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { taskId } = body;
-
-  if (!taskId) {
-    return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
-  }
-
-  // Fetch the task
-  const { data: task, error: taskError } = await supabase
+  // Fetch all pending tasks for this user
+  const { data: pendingTasks, error: tasksError } = await supabase
     .from('tasks')
     .select('*')
-    .eq('id', taskId)
     .eq('assigned_to', user.id)
-    .single();
+    .eq('status', 'Pending');
 
-  if (taskError || !task) {
-    return NextResponse.json({ error: 'Task not found' }, { status: 404 });
-  }
-
-  if (task.status === 'Completed') {
-    return NextResponse.json({ verified: true, message: 'Already completed' });
+  if (tasksError || !pendingTasks || pendingTasks.length === 0) {
+    return NextResponse.json({ verifiedCount: 0, message: 'No pending tasks to verify.' });
   }
 
   // Fetch user profile for handles
@@ -171,48 +150,62 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
   }
 
-  let verified = false;
+  // Check which platforms we need to hit
+  const hasLC = pendingTasks.some(t => t.platform === 'LeetCode');
+  const hasCF = pendingTasks.some(t => t.platform === 'Codeforces');
 
-  if (task.platform === 'Codeforces') {
-    if (!profile.cf_handle) {
-      return NextResponse.json(
-        { error: 'Codeforces handle not set in your profile' },
-        { status: 400 }
-      );
-    }
-    verified = await verifyCodeforces(profile.cf_handle, task.problem_slug_or_id);
-  } else if (task.platform === 'LeetCode') {
-    if (!profile.lc_handle) {
-      return NextResponse.json(
-        { error: 'LeetCode handle not set in your profile' },
-        { status: 400 }
-      );
-    }
-    verified = await verifyLeetCode(profile.lc_handle, task.problem_slug_or_id);
+  let lcSolved = new Set<string>();
+  let cfSolved = new Set<string>();
+
+  // Fetch solved sets concurrently if possible
+  const promises = [];
+  if (hasLC && profile.lc_handle) {
+    promises.push(getLeetCodeAC(profile.lc_handle).then(set => lcSolved = set));
+  }
+  if (hasCF && profile.cf_handle) {
+    promises.push(getCodeforcesAC(profile.cf_handle).then(set => cfSolved = set));
+  }
+  
+  if (promises.length > 0) {
+    await Promise.all(promises);
   }
 
-  if (verified) {
-    // Update task status
+  // Determine which tasks can be marked completed
+  const completedTaskIds: number[] = [];
+
+  for (const task of pendingTasks) {
+    if (task.platform === 'LeetCode' && lcSolved.has(normalizeLC(task.problem_slug_or_id))) {
+      completedTaskIds.push(task.id);
+    } else if (task.platform === 'Codeforces' && cfSolved.has(normalizeCF(task.problem_slug_or_id))) {
+      completedTaskIds.push(task.id);
+    }
+  }
+
+  if (completedTaskIds.length > 0) {
+    // Batch update the tasks
     const { error: updateError } = await supabase
       .from('tasks')
       .update({
         status: 'Completed',
         completed_at: new Date().toISOString(),
       })
-      .eq('id', taskId);
+      .in('id', completedTaskIds);
 
     if (updateError) {
       return NextResponse.json(
-        { error: 'Failed to update task status' },
+        { error: 'Failed to update task statuses' },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ verified: true, message: 'Problem verified and marked as completed!' });
+    return NextResponse.json({ 
+      verifiedCount: completedTaskIds.length, 
+      message: `Successfully verified ${completedTaskIds.length} tasks!` 
+    });
   }
 
   return NextResponse.json({
-    verified: false,
-    message: 'Could not verify submission. Make sure you have solved the problem with an accepted verdict.',
+    verifiedCount: 0,
+    message: 'Could not verify any new submissions. Keep solving!',
   });
 }

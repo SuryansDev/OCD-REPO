@@ -34,7 +34,7 @@ export default function SignupPage() {
       password: formData.password,
       options: {
         data: {
-          role: 'mentee', // Default role
+          role: 'user', // Default role
           full_name: formData.full_name,
           year: formData.year,
           branch: formData.branch,
