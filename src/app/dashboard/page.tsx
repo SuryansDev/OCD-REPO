@@ -7,10 +7,10 @@ import Navbar from '@/components/Navbar';
 import PlatformBadge from '@/components/PlatformBadge';
 import Confetti from '@/components/Confetti';
 import type { UserProfile, Task } from '@/lib/types';
-import { 
-  Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2, 
-  Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink, 
-  Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight 
+import {
+  Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2,
+  Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink,
+  Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 const getTaskLink = (task: any) => {
@@ -41,7 +41,7 @@ const formatProblemTitle = (slugOrId: string, platform: string) => {
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  
+
   // My mentee role state
   const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [syncing, setSyncing] = useState(false);
@@ -132,7 +132,7 @@ export default function Dashboard() {
         if (lbData.stats) setLeaderboardData(lbData.stats);
         if (lbData.latest_contests) setLatestContests(lbData.latest_contests);
       }
-    } catch {}
+    } catch { }
 
     setLoading(false);
   }, [supabase, router]);
@@ -169,7 +169,7 @@ export default function Dashboard() {
     myMentees.forEach(m => {
       const mTasks = menteeAllTasks.filter(t => t.assigned_to === m.id);
       const completedTasks = mTasks.filter(t => t.status === 'Completed' && t.completed_at);
-      
+
       // Find most recent completion time
       let lastCompletedTime = 0;
       completedTasks.forEach(t => {
@@ -223,7 +223,7 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ link: taskLink }),
       });
-      
+
       const data = await res.json();
       if (res.ok) {
         setTaskLink('');
@@ -241,12 +241,12 @@ export default function Dashboard() {
     e.preventDefault();
     if (!selectedMentorId) return;
     setRequesting(true);
-    
+
     // Check if already requested or linked
     const { error } = await supabase.from('mentorship_requests').insert([
       { mentor_id: selectedMentorId, mentee_id: profile!.id }
     ]);
-    
+
     if (error) {
       alert('Failed to request or request already exists.');
     } else {
@@ -263,7 +263,7 @@ export default function Dashboard() {
 
   const handleRemoveMentee = async (menteeId: string, menteeName: string) => {
     if (!confirm(`Are you sure you want to remove ${menteeName} from your cohort? This will delete the mentorship link.`)) return;
-    
+
     const { error } = await supabase
       .from('mentorships')
       .delete()
@@ -387,19 +387,19 @@ export default function Dashboard() {
       <div className="min-h-screen bg-surface-50 relative overflow-hidden">
         <Confetti />
         <Navbar fullName={profile.full_name} role={profile.role as any} />
-        
+
         <main className="max-w-4xl mx-auto px-4 py-24 relative z-10 flex flex-col items-center text-center animate-fade-in">
           <div className="w-24 h-24 bg-gradient-to-tr from-amber-400 to-yellow-200 rounded-full flex items-center justify-center mb-8 shadow-2xl shadow-amber-500/30">
             <span className="text-5xl">🎓</span>
           </div>
-          
+
           <h1 className="text-4xl md:text-5xl font-black text-surface-900 tracking-tight mb-6">
             Welcome to the <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-yellow-400">Hall of Fame</span>
           </h1>
-          
+
           <p className="text-lg text-surface-600 max-w-2xl leading-relaxed mb-12">
-            You have successfully completed your journey and are now officially an OCD Alumni. 
-            Thank you for your incredible service, dedication, and the knowledge you passed down 
+            You have successfully completed your journey and are now officially an OCD Alumni.
+            Thank you for your incredible service, dedication, and the knowledge you passed down
             to your mentees. OCD will forever remember your legacy!
           </p>
 
@@ -439,7 +439,7 @@ export default function Dashboard() {
             <p className="text-surface-600 mb-8 leading-relaxed">
               You have successfully completed the academic year and have been promoted to <strong className="text-brand-600">Year {profile?.year}</strong>. Keep up the great work!
             </p>
-            <button 
+            <button
               onClick={handleAcknowledgePromotion}
               className="btn-primary w-full py-3 text-lg"
             >
@@ -455,9 +455,9 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
             <div className="p-5 border-b border-surface-100 flex justify-between items-center bg-surface-50">
               <div>
-                <a 
-                  href={getTaskLink(selectedTaskGroup)} 
-                  target="_blank" 
+                <a
+                  href={getTaskLink(selectedTaskGroup)}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-xl font-bold text-brand-600 hover:text-brand-800 transition-colors w-fit group"
                 >
@@ -470,7 +470,7 @@ export default function Dashboard() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6">
               <div className="grid grid-cols-3 gap-4 mb-6">
                 <div className="bg-surface-50 rounded-xl p-4 border border-surface-100 text-center">
@@ -517,7 +517,7 @@ export default function Dashboard() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-6">
               {menteeStats[selectedMentee.id]?.hasAlert && (
                 <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-xl flex items-start gap-3">
@@ -546,10 +546,10 @@ export default function Dashboard() {
 
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
-        
+
         {/* --- TOP SECTION: MY ASSIGNMENTS (LEFT) & LEADERBOARD (RIGHT) --- */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          
+
           {/* LEFT: MY ASSIGNMENTS */}
           <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.1s' }}>
             <div className="flex items-center justify-between mb-5">
@@ -564,9 +564,9 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              
+
               {myTasks.filter(t => t.status === 'Pending').length > 0 && (
-                <button 
+                <button
                   onClick={handleSyncProgress}
                   disabled={syncing}
                   className="btn-primary py-1.5 px-3.5 text-xs shadow-md shadow-brand-500/20"
@@ -617,9 +617,9 @@ export default function Dashboard() {
 
                           {/* Problem Title Link */}
                           <td className="py-3 px-4">
-                            <a 
-                              href={getTaskLink(task)} 
-                              target="_blank" 
+                            <a
+                              href={getTaskLink(task)}
+                              target="_blank"
                               rel="noopener noreferrer"
                               className="font-semibold text-surface-900 group-hover:text-brand-600 inline-flex items-center gap-1.5 max-w-[200px] sm:max-w-[260px] truncate transition-colors"
                               title={task.problem_slug_or_id}
@@ -673,8 +673,8 @@ export default function Dashboard() {
                 </span>
 
                 <div className="flex items-center gap-2 order-1 sm:order-2">
-                  <button 
-                    onClick={() => setTaskPage(p => Math.max(1, p - 1))} 
+                  <button
+                    onClick={() => setTaskPage(p => Math.max(1, p - 1))}
                     disabled={safeTaskPage <= 1}
                     className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
                     title="Previous page"
@@ -682,11 +682,11 @@ export default function Dashboard() {
                     <ChevronLeft className="w-4 h-4" />
                   </button>
 
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max={totalTaskPages} 
-                    value={safeTaskPage} 
+                  <input
+                    type="range"
+                    min="1"
+                    max={totalTaskPages}
+                    value={safeTaskPage}
                     onChange={(e) => setTaskPage(Number(e.target.value))}
                     disabled={totalTaskPages <= 1}
                     className="w-20 accent-brand-600 h-1.5 bg-surface-200 rounded-lg cursor-pointer disabled:opacity-40"
@@ -697,8 +697,8 @@ export default function Dashboard() {
                     {safeTaskPage} / {totalTaskPages}
                   </span>
 
-                  <button 
-                    onClick={() => setTaskPage(p => Math.min(totalTaskPages, p + 1))} 
+                  <button
+                    onClick={() => setTaskPage(p => Math.min(totalTaskPages, p + 1))}
                     disabled={safeTaskPage >= totalTaskPages}
                     className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
                     title="Next page"
@@ -741,11 +741,10 @@ export default function Dashboard() {
                   <button
                     key={tab.key}
                     onClick={() => handleTabChange(tab.key)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                      leaderboardTab === tab.key
-                        ? 'bg-brand-600 text-white shadow-md shadow-brand-500/30'
-                        : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
-                    }`}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${leaderboardTab === tab.key
+                      ? 'bg-brand-600 text-white shadow-md shadow-brand-500/30'
+                      : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -907,8 +906,8 @@ export default function Dashboard() {
                             <Trophy className="w-8 h-8 text-surface-300 mx-auto mb-2" />
                             <p className="font-semibold text-surface-700 text-sm">No leaderboard data found</p>
                             <p className="text-xs text-surface-400 mt-1">
-                              {leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest' 
-                                ? 'No participants in this contest yet.' 
+                              {leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest'
+                                ? 'No participants in this contest yet.'
                                 : 'Rankings will appear once synced.'}
                             </p>
                           </td>
@@ -918,8 +917,8 @@ export default function Dashboard() {
                           const actualRank = (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + index;
                           const isMe = entry.user_id === profile?.id;
                           return (
-                            <tr 
-                              key={entry.user_id} 
+                            <tr
+                              key={entry.user_id}
                               className={`hover:bg-surface-50 transition-colors ${isMe ? 'bg-brand-50/50 font-semibold' : ''}`}
                             >
                               <td className="py-2.5 px-3 text-center text-xs">
@@ -936,7 +935,7 @@ export default function Dashboard() {
                               <td className="py-2.5 px-2 text-center text-xs text-surface-500">
                                 {entry.user?.year === 'Alumni' ? '🎓' : entry.user?.year}
                               </td>
-                              
+
                               {leaderboardTab === 'streak' && (
                                 <>
                                   <td className="py-2.5 px-3 text-right">
@@ -1023,8 +1022,8 @@ export default function Dashboard() {
                   </span>
 
                   <div className="flex items-center gap-2 order-1 sm:order-2">
-                    <button 
-                      onClick={() => setLeaderboardPage(p => Math.max(1, p - 1))} 
+                    <button
+                      onClick={() => setLeaderboardPage(p => Math.max(1, p - 1))}
                       disabled={safeLeaderboardPage <= 1}
                       className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
                       title="Previous page"
@@ -1032,11 +1031,11 @@ export default function Dashboard() {
                       <ChevronLeft className="w-4 h-4" />
                     </button>
 
-                    <input 
-                      type="range" 
-                      min="1" 
-                      max={totalLeaderboardPages} 
-                      value={safeLeaderboardPage} 
+                    <input
+                      type="range"
+                      min="1"
+                      max={totalLeaderboardPages}
+                      value={safeLeaderboardPage}
                       onChange={(e) => setLeaderboardPage(Number(e.target.value))}
                       disabled={totalLeaderboardPages <= 1}
                       className="w-20 accent-brand-600 h-1.5 bg-surface-200 rounded-lg cursor-pointer disabled:opacity-40"
@@ -1047,8 +1046,8 @@ export default function Dashboard() {
                       {safeLeaderboardPage} / {totalLeaderboardPages}
                     </span>
 
-                    <button 
-                      onClick={() => setLeaderboardPage(p => Math.min(totalLeaderboardPages, p + 1))} 
+                    <button
+                      onClick={() => setLeaderboardPage(p => Math.min(totalLeaderboardPages, p + 1))}
                       disabled={safeLeaderboardPage >= totalLeaderboardPages}
                       className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
                       title="Next page"
@@ -1091,8 +1090,8 @@ export default function Dashboard() {
               ) : (
                 <ul className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
                   {myMentees.map(m => (
-                    <li 
-                      key={m.id} 
+                    <li
+                      key={m.id}
                       onClick={() => setSelectedMentee(m)}
                       className="flex items-center justify-between p-3 rounded-xl bg-surface-50/70 border border-surface-200 hover:border-brand-300 hover:bg-brand-50/40 cursor-pointer transition-all group"
                     >
@@ -1140,16 +1139,16 @@ export default function Dashboard() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
-            
+
             {/* Request Mentor */}
             <div className="card p-6 flex flex-col justify-between">
               <div>
                 <h3 className="text-lg font-bold text-surface-900 mb-4">Request a Mentor</h3>
-                
+
                 <form onSubmit={handleRequestMentor} className="space-y-3">
                   <div className="flex gap-2">
-                    <select 
-                      value={selectedMentorId} 
+                    <select
+                      value={selectedMentorId}
                       onChange={e => setSelectedMentorId(e.target.value)}
                       className="input-field flex-1 text-sm"
                       required
@@ -1184,7 +1183,7 @@ export default function Dashboard() {
             <div className="card p-6 border-brand-200 border-2 bg-brand-50/30 flex flex-col">
               <h3 className="text-lg font-bold text-surface-900 mb-1">Assign Task to Cohort</h3>
               <p className="text-sm text-surface-500 mb-6">Paste a Codeforces or LeetCode problem URL. It will be assigned to all your approved mentees.</p>
-              
+
               <form onSubmit={handleAssignTask} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Problem Link</label>
@@ -1202,9 +1201,9 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <button 
-                  type="submit" 
-                  disabled={assigning || myMentees.length === 0} 
+                <button
+                  type="submit"
+                  disabled={assigning || myMentees.length === 0}
                   className="btn-primary w-full"
                 >
                   {assigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
@@ -1220,20 +1219,20 @@ export default function Dashboard() {
               <div className="mt-8 pt-6 border-t border-brand-100 flex-1 flex flex-col min-h-0">
                 <h4 className="text-sm font-bold text-surface-900 mb-3">Recently Assigned (Click for details)</h4>
                 {groupedTasks.length === 0 ? (
-                   <p className="text-xs text-surface-500">No tasks assigned yet.</p>
+                  <p className="text-xs text-surface-500">No tasks assigned yet.</p>
                 ) : (
                   <ul className="space-y-2 overflow-y-auto pr-2">
                     {groupedTasks.map(group => (
-                      <li 
-                        key={group.key} 
+                      <li
+                        key={group.key}
                         onClick={() => setSelectedTaskGroup(group)}
                         className="flex items-center justify-between text-sm p-3 rounded-lg bg-white border border-brand-100 hover:border-brand-300 hover:shadow-sm cursor-pointer transition-all"
                       >
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-surface-900">{group.problem_slug_or_id}</span>
-                          <a 
-                            href={getTaskLink(group)} 
-                            target="_blank" 
+                          <a
+                            href={getTaskLink(group)}
+                            target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
                             className="text-surface-400 hover:text-brand-600 transition-colors"

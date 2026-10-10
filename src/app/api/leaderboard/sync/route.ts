@@ -14,7 +14,7 @@ function createRouteHandlerClient(request: NextRequest) {
             cookiesToSet.forEach(({ name, value }) => {
               cookieStore.set(name, value);
             });
-          } catch (error) {}
+          } catch (error) { }
         },
       },
     }
@@ -84,7 +84,7 @@ async function fetchLCProfile(handle: string) {
       const m = h.match(/leetcode\.com\/(?:u\/)?([^\/]+)/);
       if (m) h = m[1];
     }
-    
+
     const res = await fetch('https://leetcode.com/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -113,12 +113,12 @@ async function fetchLCProfile(handle: string) {
 
     if (!res.ok) return null;
     const data = await res.json();
-    
+
     const totalSolved = data?.data?.matchedUser?.submitStats?.acSubmissionNum
       ?.find((s: any) => s.difficulty === 'All')?.count || 0;
-    
+
     const ranking = data?.data?.userContestRanking;
-    
+
     return { totalSolved, rating: ranking?.rating, globalRanking: ranking?.globalRanking };
   } catch { return null; }
 }
@@ -131,7 +131,7 @@ async function fetchLCContestHistory(handle: string) {
       const m = h.match(/leetcode\.com\/(?:u\/)?([^\/]+)/);
       if (m) h = m[1];
     }
-    
+
     const res = await fetch('https://leetcode.com/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -160,7 +160,7 @@ async function fetchLCContestHistory(handle: string) {
     const data = await res.json();
     const history = data?.data?.userContestRankingHistory;
     if (!Array.isArray(history) || history.length === 0) return null;
-    
+
     // Find the last attended contest
     const attended = history.filter((c: any) => c.attended);
     if (attended.length === 0) return null;
@@ -396,7 +396,7 @@ async function fetchLatestCFContest() {
           totalContestParticipants = rcData.result.length;
         }
       }
-    } catch {}
+    } catch { }
 
     return {
       id: latest.id,

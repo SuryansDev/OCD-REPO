@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
   if (hasCF && profile.cf_handle) {
     promises.push(getCodeforcesAC(profile.cf_handle).then(set => cfSolved = set));
   }
-  
+
   if (promises.length > 0) {
     await Promise.all(promises);
   }
@@ -198,9 +198,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ 
-      verifiedCount: completedTaskIds.length, 
-      message: `Successfully verified ${completedTaskIds.length} tasks!` 
+    return NextResponse.json({
+      verifiedCount: completedTaskIds.length,
+      message: `Successfully verified ${completedTaskIds.length} tasks!`
     });
   }
 
