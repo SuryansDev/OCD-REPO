@@ -48,6 +48,7 @@ export async function updateSession(request: NextRequest) {
     const isAppPage = request.nextUrl.pathname === '/login' ||
                       request.nextUrl.pathname === '/signup' ||
                       request.nextUrl.pathname === '/pending' ||
+                      request.nextUrl.pathname === '/onboarding' ||
                       isProtected;
 
     if (isAppPage) {
@@ -64,9 +65,29 @@ export async function updateSession(request: NextRequest) {
       
       const { data: profile } = await supabaseAdmin
         .from('users')
-        .select('role, approval_status')
+        .select('role, approval_status, roll_number, year')
         .eq('id', user.id)
         .single();
+
+      // 1. Incomplete profile check (e.g. fresh Google OAuth sign-in)
+      const isProfileIncomplete = !profile || !profile.roll_number || !profile.year;
+      if (isProfileIncomplete && profile?.role !== 'admin') {
+        if (request.nextUrl.pathname !== '/onboarding') {
+          return NextResponse.redirect(new URL('/onboarding', request.url));
+        }
+        return response;
+      }
+
+      // 2. Already completed profile trying to visit /onboarding
+      if (request.nextUrl.pathname === '/onboarding') {
+        if (profile?.role === 'admin') {
+          return NextResponse.redirect(new URL('/admin', request.url));
+        } else if (profile?.approval_status === 'approved') {
+          return NextResponse.redirect(new URL('/dashboard', request.url));
+        } else {
+          return NextResponse.redirect(new URL('/pending', request.url));
+        }
+      }
 
       if (profile) {
         // Enforce approval status

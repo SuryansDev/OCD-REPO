@@ -121,20 +121,39 @@ LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.users (id, role, approval_status, full_name, email, year, branch, contact_number, roll_number, cf_handle, lc_handle)
+  INSERT INTO public.users (
+    id,
+    role,
+    approval_status,
+    full_name,
+    email,
+    year,
+    branch,
+    contact_number,
+    roll_number,
+    cf_handle,
+    lc_handle
+  )
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data ->> 'role', 'user'),
     'pending', -- All new users are pending by default
-    COALESCE(NEW.raw_user_meta_data ->> 'full_name', ''),
+    COALESCE(
+      NEW.raw_user_meta_data ->> 'full_name',
+      NEW.raw_user_meta_data ->> 'name',
+      split_part(NEW.email, '@', 1)
+    ),
     NEW.email,
-    NEW.raw_user_meta_data ->> 'year',
-    NEW.raw_user_meta_data ->> 'branch',
-    NEW.raw_user_meta_data ->> 'contact_number',
-    NEW.raw_user_meta_data ->> 'roll_number',
-    NEW.raw_user_meta_data ->> 'cf_handle',
-    NEW.raw_user_meta_data ->> 'lc_handle'
-  );
+    COALESCE(NEW.raw_user_meta_data ->> 'year', ''),
+    COALESCE(NEW.raw_user_meta_data ->> 'branch', ''),
+    COALESCE(NEW.raw_user_meta_data ->> 'contact_number', ''),
+    COALESCE(NEW.raw_user_meta_data ->> 'roll_number', ''),
+    COALESCE(NEW.raw_user_meta_data ->> 'cf_handle', ''),
+    COALESCE(NEW.raw_user_meta_data ->> 'lc_handle', '')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email;
+
   RETURN NEW;
 END;
 $$;
