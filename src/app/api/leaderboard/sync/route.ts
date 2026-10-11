@@ -183,14 +183,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   }
 
-  // Fetch all approved users with handles
+  // Fetch all approved non-admin users with handles
   const { data: users, error: usersError } = await supabase
     .from('users')
     .select('id, cf_handle, lc_handle')
-    .eq('approval_status', 'approved');
+    .eq('approval_status', 'approved')
+    .neq('role', 'admin');
 
   if (usersError || !users) {
     return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+  }
+
+  // Clean up any user_stats for users that are deactivated or admin
+  const { data: invalidUsers } = await supabase
+    .from('users')
+    .select('id')
+    .or('approval_status.neq.approved,role.eq.admin');
+
+  if (invalidUsers && invalidUsers.length > 0) {
+    const invalidIds = invalidUsers.map((u) => u.id);
+    await supabase.from('user_stats').delete().in('user_id', invalidIds);
   }
 
   let synced = 0;
@@ -435,17 +447,22 @@ export async function GET(request: NextRequest) {
 
   const { data: stats, error } = await supabase
     .from('user_stats')
-    .select('*, user:users!user_stats_user_id_fkey(id, full_name, year, cf_handle, lc_handle)')
+    .select('*, user:users!user_stats_user_id_fkey(id, full_name, year, cf_handle, lc_handle, role, approval_status)')
     .order('synced_at', { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Strictly filter out admin and deactivated/non-approved accounts
+  const activeStats = (stats || []).filter(
+    (s: any) => s.user && s.user.role !== 'admin' && s.user.approval_status === 'approved'
+  );
+
   const latestContests = await getLatestContests();
 
   return NextResponse.json({
-    stats,
+    stats: activeStats,
     latest_contests: latestContests,
   });
 }

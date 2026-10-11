@@ -49,6 +49,10 @@ export default function AdminDashboard() {
 
   const handleApproval = async (id: string, status: ApprovalStatus) => {
     await supabase.from('users').update({ approval_status: status }).eq('id', id);
+    if (status !== 'approved') {
+      // Immediately remove from leaderboard rankings if rejected or deactivated
+      await supabase.from('user_stats').delete().eq('user_id', id);
+    }
     fetchData();
   };
 

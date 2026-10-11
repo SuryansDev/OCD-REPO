@@ -117,8 +117,13 @@ export default function Dashboard() {
     const { data: aTasks } = await supabase.from('tasks').select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email)').eq('assigned_by', user.id).order('created_at', { ascending: false });
     if (aTasks) setAssignedTasks(aTasks);
 
-    // Fetch all users for requesting mentors
-    const { data: users } = await supabase.from('users').select('*').neq('id', user.id);
+    // Fetch all eligible users for requesting mentors (approved non-admin members only)
+    const { data: users } = await supabase
+      .from('users')
+      .select('*')
+      .neq('id', user.id)
+      .eq('approval_status', 'approved')
+      .neq('role', 'admin');
     if (users) setAllUsers(users);
 
     // Fetch pending requests I made (asking someone to be my mentor)
@@ -130,7 +135,12 @@ export default function Dashboard() {
       const lbRes = await fetch('/api/leaderboard/sync');
       if (lbRes.ok) {
         const lbData = await lbRes.json();
-        if (lbData.stats) setLeaderboardData(lbData.stats);
+        if (lbData.stats) {
+          const validStats = lbData.stats.filter(
+            (s: any) => s.user && s.user.role !== 'admin' && s.user.approval_status === 'approved'
+          );
+          setLeaderboardData(validStats);
+        }
         if (lbData.latest_contests) setLatestContests(lbData.latest_contests);
       }
     } catch { }
