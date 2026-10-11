@@ -275,18 +275,34 @@ export default function Dashboard() {
   const handleRemoveMentee = async (menteeId: string, menteeName: string) => {
     if (!confirm(`Are you sure you want to remove ${menteeName} from your cohort? This will delete the mentorship link.`)) return;
 
-    const { error } = await supabase
+    // 1. Delete mentorship link
+    const { data: deleted, error } = await supabase
       .from('mentorships')
+      .delete()
+      .eq('mentor_id', profile!.id)
+      .eq('mentee_id', menteeId)
+      .select();
+
+    if (error) {
+      alert(`Failed to remove mentee: ${error.message}`);
+      return;
+    }
+
+    if (!deleted || deleted.length === 0) {
+      alert('Could not remove mentee: Permission denied by database. Please run supabase/fix_mentorship_rls.sql in your Supabase SQL Editor.');
+      return;
+    }
+
+    // 2. Also remove any approved mentorship request so they can request again if needed
+    await supabase
+      .from('mentorship_requests')
       .delete()
       .eq('mentor_id', profile!.id)
       .eq('mentee_id', menteeId);
 
-    if (error) {
-      alert('Failed to remove mentee. Please try again.');
-    } else {
-      // Remove from local state immediately
-      setMyMentees(prev => prev.filter(m => m.id !== menteeId));
-    }
+    // 3. Update local state & refetch cohort tasks
+    setMyMentees(prev => prev.filter(m => m.id !== menteeId));
+    fetchData();
   };
 
   // Sort tasks: newest problem at the top
