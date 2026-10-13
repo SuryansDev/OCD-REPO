@@ -54,3 +54,39 @@ export interface TaskWithMentee extends Task {
 export interface MentorshipWithMentee extends Mentorship {
   mentee: Pick<UserProfile, 'id' | 'full_name' | 'email' | 'cf_handle' | 'lc_handle'>;
 }
+
+export type PlatformSyncStatus = 'ok' | 'private_or_not_found' | 'missing' | 'error' | 'unknown';
+
+export interface UserStats {
+  id?: number;
+  user_id: string;
+  lc_rating?: number | null;
+  lc_total_solved?: number | null;
+  lc_latest_contest_name?: string | null;
+  lc_latest_contest_rank?: number | null;
+  lc_latest_contest_rating?: number | null;
+  lc_latest_contest_solved?: number | null;
+  lc_latest_contest_date?: string | null;
+  
+  cf_rating?: number | null;
+  cf_max_rating?: number | null;
+  cf_total_solved?: number | null;
+  cf_latest_contest_name?: string | null;
+  cf_latest_contest_rank?: number | null;
+  cf_latest_contest_rating?: number | null;
+  cf_latest_contest_date?: string | null;
+  
+  current_streak?: number;
+  max_streak?: number;
+  last_solve_date?: string | null;
+  synced_at?: string;
+
+  // Sync Diagnostics
+  lc_status?: PlatformSyncStatus;
+  lc_error_msg?: string | null;
+  cf_status?: PlatformSyncStatus;
+  cf_error_msg?: string | null;
+
+  user?: UserProfile;
+}
+

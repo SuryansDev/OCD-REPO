@@ -6,6 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import type { UserProfile } from '@/lib/types';
 import { 
+  cleanCodeforcesHandle, cleanLeetCodeHandle, 
+  getCodeforcesProfileUrl, getLeetCodeProfileUrl 
+} from '@/lib/handles';
+import { 
   Loader2, Save, User, Mail, Phone, Hash, BookOpen, GitBranch, 
   ExternalLink, CheckCircle, AlertCircle, ArrowLeft
 } from 'lucide-react';
@@ -29,6 +33,7 @@ function ProfileContent() {
   const supabase = createClient();
 
   const isOwnProfile = !targetUserId || (currentUser && currentUser.id === targetUserId);
+  const canEdit = isOwnProfile || currentUser?.role === 'admin';
 
   const fetchProfile = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -61,36 +66,42 @@ function ProfileContent() {
   }, [fetchProfile]);
 
   const handleSave = async () => {
-    if (!profile || !isOwnProfile) return;
+    if (!profile || !canEdit) return;
     setSaving(true);
     setSaveSuccess(false);
     setSaveError(null);
 
+    const cleanedLc = cleanLeetCodeHandle(lcHandle) || null;
+    const cleanedCf = cleanCodeforcesHandle(cfHandle) || null;
+    const cleanedContact = contactNumber.trim() || null;
+
     const { error } = await supabase.from('users').update({
-      lc_handle: lcHandle.trim() || null,
-      cf_handle: cfHandle.trim() || null,
-      contact_number: contactNumber.trim() || null,
+      lc_handle: cleanedLc,
+      cf_handle: cleanedCf,
+      contact_number: cleanedContact,
     }).eq('id', profile.id);
 
     if (error) {
       setSaveError('Failed to save changes. Please try again.');
     } else {
       setSaveSuccess(true);
-      // Update local profile state
+      setLcHandle(cleanedLc || '');
+      setCfHandle(cleanedCf || '');
+      setContactNumber(cleanedContact || '');
       setProfile(prev => prev ? {
         ...prev,
-        lc_handle: lcHandle.trim() || null,
-        cf_handle: cfHandle.trim() || null,
-        contact_number: contactNumber.trim() || null,
+        lc_handle: cleanedLc,
+        cf_handle: cleanedCf,
+        contact_number: cleanedContact,
       } : null);
       setTimeout(() => setSaveSuccess(false), 3000);
     }
     setSaving(false);
   };
 
-  const hasChanges = profile && isOwnProfile && (
-    (lcHandle.trim() || '') !== (profile.lc_handle || '') ||
-    (cfHandle.trim() || '') !== (profile.cf_handle || '') ||
+  const hasChanges = profile && canEdit && (
+    (cleanLeetCodeHandle(lcHandle) || '') !== (cleanLeetCodeHandle(profile.lc_handle) || '') ||
+    (cleanCodeforcesHandle(cfHandle) || '') !== (cleanCodeforcesHandle(profile.cf_handle) || '') ||
     (contactNumber.trim() || '') !== (profile.contact_number || '')
   );
 
@@ -209,7 +220,9 @@ function ProfileContent() {
           <p className="text-xs text-surface-400 mb-5">
             {isOwnProfile 
               ? 'You can update these fields anytime.' 
-              : "Platform handles and contact details for this member."}
+              : currentUser?.role === 'admin'
+                ? "You are viewing this member as an Admin. You can correct their handles or contact details if needed."
+                : "Platform handles and contact details for this member."}
           </p>
 
           <div className="space-y-4">
@@ -218,7 +231,7 @@ function ProfileContent() {
               <label className="block text-xs font-bold uppercase tracking-wider text-surface-500 mb-1.5">
                 LeetCode Username
               </label>
-              {isOwnProfile ? (
+              {canEdit ? (
                 <div className="relative">
                   <input
                     type="text"
@@ -239,18 +252,18 @@ function ProfileContent() {
                     <span className="text-[10px] font-black text-white">LC</span>
                   </div>
                   <span className="text-sm font-semibold text-surface-800">
-                    {profile?.lc_handle || 'Not set'}
+                    {cleanLeetCodeHandle(profile?.lc_handle) || 'Not set'}
                   </span>
                 </div>
               )}
 
-              {lcHandle && (
+              {getLeetCodeProfileUrl(lcHandle || profile?.lc_handle) && (
                 <a 
-                  href={`https://leetcode.com/u/${lcHandle}`} 
+                  href={getLeetCodeProfileUrl(lcHandle || profile?.lc_handle)!} 
                   target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 mt-1.5 transition-colors"
+                  className="inline-flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 mt-1.5 transition-colors font-medium"
                 >
-                  <ExternalLink className="w-3 h-3" /> View on LeetCode
+                  <ExternalLink className="w-3 h-3" /> View on LeetCode ({cleanLeetCodeHandle(lcHandle || profile?.lc_handle)})
                 </a>
               )}
             </div>
@@ -260,7 +273,7 @@ function ProfileContent() {
               <label className="block text-xs font-bold uppercase tracking-wider text-surface-500 mb-1.5">
                 Codeforces Handle
               </label>
-              {isOwnProfile ? (
+              {canEdit ? (
                 <div className="relative">
                   <input
                     type="text"
@@ -281,28 +294,39 @@ function ProfileContent() {
                     <span className="text-[10px] font-black text-white">CF</span>
                   </div>
                   <span className="text-sm font-semibold text-surface-800">
-                    {profile?.cf_handle || 'Not set'}
+                    {cleanCodeforcesHandle(profile?.cf_handle) || 'Not set'}
                   </span>
                 </div>
               )}
 
-              {cfHandle && (
+              {getCodeforcesProfileUrl(cfHandle || profile?.cf_handle) && (
                 <a 
-                  href={`https://codeforces.com/profile/${cfHandle}`} 
+                  href={getCodeforcesProfileUrl(cfHandle || profile?.cf_handle)!} 
                   target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1.5 transition-colors"
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1.5 transition-colors font-medium"
                 >
-                  <ExternalLink className="w-3 h-3" /> View on Codeforces
+                  <ExternalLink className="w-3 h-3" /> View on Codeforces ({cleanCodeforcesHandle(cfHandle || profile?.cf_handle)})
                 </a>
               )}
             </div>
 
+            {/* Sync & Privacy Advisory Box */}
+            <div className="rounded-xl bg-amber-50/80 border border-amber-200/70 p-3.5 text-xs text-amber-900 flex items-start gap-2.5 mt-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-bold text-amber-950">Important Privacy Requirement for Rankings &amp; Task Sync:</p>
+                <p className="text-amber-800 leading-relaxed">
+                  Make sure your <strong>LeetCode profile and submission history</strong> are set to <strong>Public</strong> in your LeetCode Account Privacy settings. If set to Private, our system cannot pull contest ratings, questions solved, or verify assigned tasks.
+                </p>
+              </div>
+            </div>
+
             {/* Contact Number */}
-            <div>
+            <div className="pt-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-surface-500 mb-1.5">
                 Mobile Number
               </label>
-              {isOwnProfile ? (
+              {canEdit ? (
                 <div className="relative">
                   <input
                     type="tel"

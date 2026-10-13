@@ -26,11 +26,16 @@ CREATE TABLE IF NOT EXISTS public.user_stats (
   cf_latest_contest_rating INT,
   cf_latest_contest_date   TIMESTAMPTZ,
   
-  -- Streak tracking (days of consecutive solving across both platforms)
   current_streak   INT DEFAULT 0,
   max_streak       INT DEFAULT 0,
   last_solve_date  DATE,
   
+  -- Profile sync diagnostics (detects private settings / broken API)
+  lc_status        TEXT DEFAULT 'unknown',
+  lc_error_msg     TEXT,
+  cf_status        TEXT DEFAULT 'unknown',
+  cf_error_msg     TEXT,
+
   synced_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   
   CONSTRAINT unique_user_stats UNIQUE (user_id)

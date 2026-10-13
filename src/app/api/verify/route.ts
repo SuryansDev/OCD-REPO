@@ -46,13 +46,12 @@ function normalizeLC(slug: string): string {
     .replace(/\/$/, '');
 }
 
+import { cleanCodeforcesHandle, cleanLeetCodeHandle } from '@/lib/handles';
+
 // ─── Codeforces verification ────────────────────────────────
 async function getCodeforcesAC(cfHandleInput: string): Promise<Set<string>> {
-  let cfHandle = cfHandleInput.trim();
-  if (cfHandle.includes('codeforces.com/profile/')) {
-    const match = cfHandle.match(/profile\/([^\/]+)/);
-    if (match) cfHandle = match[1];
-  }
+  const cfHandle = cleanCodeforcesHandle(cfHandleInput);
+  if (!cfHandle) return new Set();
 
   try {
     const res = await fetch(
@@ -79,11 +78,8 @@ async function getCodeforcesAC(cfHandleInput: string): Promise<Set<string>> {
 
 // ─── LeetCode verification ─────────────────────────────────
 async function getLeetCodeAC(lcHandleInput: string): Promise<Set<string>> {
-  let lcHandle = lcHandleInput.trim();
-  if (lcHandle.includes('leetcode.com/')) {
-    const match = lcHandle.match(/leetcode\.com\/(?:u\/)?([^\/]+)/);
-    if (match) lcHandle = match[1];
-  }
+  const lcHandle = cleanLeetCodeHandle(lcHandleInput);
+  if (!lcHandle) return new Set();
 
   try {
     const res = await fetch('https://leetcode.com/graphql', {
@@ -204,8 +200,17 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  let advice = 'Could not verify any new submissions. Keep solving!';
+  if (hasLC && !cleanLeetCodeHandle(profile.lc_handle)) {
+    advice += ' Note: You have pending LeetCode tasks, but your LeetCode handle is not set in your profile.';
+  } else if (hasCF && !cleanCodeforcesHandle(profile.cf_handle)) {
+    advice += ' Note: You have pending Codeforces tasks, but your Codeforces handle is not set in your profile.';
+  } else if (hasLC) {
+    advice += ' (Tip: If you recently solved on LeetCode, please ensure your profile & submission history are set to Public in LeetCode account privacy settings.)';
+  }
+
   return NextResponse.json({
     verifiedCount: 0,
-    message: 'Could not verify any new submissions. Keep solving!',
+    message: advice,
   });
 }

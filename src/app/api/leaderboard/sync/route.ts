@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { cleanCodeforcesHandle, cleanLeetCodeHandle } from '@/lib/handles';
+import type { PlatformSyncStatus } from '@/lib/types';
 
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;
@@ -21,47 +23,55 @@ function createRouteHandlerClient(request: NextRequest) {
   );
 }
 
+interface CFInfoResult {
+  ok: boolean;
+  status: PlatformSyncStatus;
+  info?: any;
+  errorMsg?: string;
+}
+
 // ─── Codeforces: fetch user info (rating) ───────────────────
-async function fetchCFInfo(handle: string) {
+async function fetchCFInfo(handle: string): Promise<CFInfoResult> {
+  const h = cleanCodeforcesHandle(handle);
+  if (!h) {
+    return { ok: false, status: 'missing', errorMsg: 'No Codeforces handle configured' };
+  }
   try {
-    let h = handle.trim();
-    if (h.includes('codeforces.com/profile/')) {
-      const m = h.match(/profile\/([^\/]+)/);
-      if (m) h = m[1];
-    }
     const res = await fetch(`https://codeforces.com/api/user.info?handles=${encodeURIComponent(h)}`, { next: { revalidate: 0 } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.status !== 'OK' || !data.result?.length) return null;
-    return data.result[0]; // { rating, maxRating, ... }
-  } catch { return null; }
+    const data = await res.json().catch(() => null);
+    if (!res.ok || data?.status !== 'OK' || !data?.result?.length) {
+      const comment = data?.comment || 'Codeforces handle not found or private';
+      const isNotFound = comment.toLowerCase().includes('not found');
+      return {
+        ok: false,
+        status: isNotFound ? 'not_found_or_private' : 'error',
+        errorMsg: comment,
+      };
+    }
+    return { ok: true, status: 'ok', info: data.result[0] };
+  } catch (err: any) {
+    return { ok: false, status: 'error', errorMsg: err?.message || 'Network error querying Codeforces API' };
+  }
 }
 
 // ─── Codeforces: fetch latest contest ───────────────────────
 async function fetchCFRating(handle: string) {
+  const h = cleanCodeforcesHandle(handle);
+  if (!h) return null;
   try {
-    let h = handle.trim();
-    if (h.includes('codeforces.com/profile/')) {
-      const m = h.match(/profile\/([^\/]+)/);
-      if (m) h = m[1];
-    }
     const res = await fetch(`https://codeforces.com/api/user.rating?handle=${encodeURIComponent(h)}`, { next: { revalidate: 0 } });
     if (!res.ok) return null;
     const data = await res.json();
     if (data.status !== 'OK' || !data.result?.length) return null;
-    // Return the last (most recent) contest
     return data.result[data.result.length - 1];
   } catch { return null; }
 }
 
 // ─── Codeforces: count unique solved problems ───────────────
 async function fetchCFSolved(handle: string): Promise<number> {
+  const h = cleanCodeforcesHandle(handle);
+  if (!h) return 0;
   try {
-    let h = handle.trim();
-    if (h.includes('codeforces.com/profile/')) {
-      const m = h.match(/profile\/([^\/]+)/);
-      if (m) h = m[1];
-    }
     const res = await fetch(`https://codeforces.com/api/user.status?handle=${encodeURIComponent(h)}&from=1&count=10000`, { next: { revalidate: 0 } });
     if (!res.ok) return 0;
     const data = await res.json();
@@ -76,15 +86,21 @@ async function fetchCFSolved(handle: string): Promise<number> {
   } catch { return 0; }
 }
 
-// ─── LeetCode: fetch profile stats ─────────────────────────
-async function fetchLCProfile(handle: string) {
-  try {
-    let h = handle.trim();
-    if (h.includes('leetcode.com/')) {
-      const m = h.match(/leetcode\.com\/(?:u\/)?([^\/]+)/);
-      if (m) h = m[1];
-    }
+interface LCProfileResult {
+  ok: boolean;
+  status: PlatformSyncStatus;
+  profile?: { totalSolved: number; rating?: number; globalRanking?: number };
+  errorMsg?: string;
+}
 
+// ─── LeetCode: fetch profile stats ─────────────────────────
+async function fetchLCProfile(handle: string): Promise<LCProfileResult> {
+  const h = cleanLeetCodeHandle(handle);
+  if (!h) {
+    return { ok: false, status: 'missing', errorMsg: 'No LeetCode handle configured' };
+  }
+
+  try {
     const res = await fetch('https://leetcode.com/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -111,27 +127,49 @@ async function fetchLCProfile(handle: string) {
       next: { revalidate: 0 },
     });
 
-    if (!res.ok) return null;
-    const data = await res.json();
+    if (!res.ok) {
+      return { ok: false, status: 'error', errorMsg: `LeetCode API responded with HTTP ${res.status}` };
+    }
 
-    const totalSolved = data?.data?.matchedUser?.submitStats?.acSubmissionNum
+    const data = await res.json().catch(() => null);
+
+    if (data?.errors && data.errors.length > 0) {
+      return {
+        ok: false,
+        status: 'private_or_not_found',
+        errorMsg: data.errors[0]?.message || 'Profile is private or username does not exist',
+      };
+    }
+
+    if (!data?.data?.matchedUser) {
+      return {
+        ok: false,
+        status: 'private_or_not_found',
+        errorMsg: 'LeetCode profile is private or username does not exist',
+      };
+    }
+
+    const totalSolved = data.data.matchedUser.submitStats?.acSubmissionNum
       ?.find((s: any) => s.difficulty === 'All')?.count || 0;
 
-    const ranking = data?.data?.userContestRanking;
+    const ranking = data.data.userContestRanking;
 
-    return { totalSolved, rating: ranking?.rating, globalRanking: ranking?.globalRanking };
-  } catch { return null; }
+    return {
+      ok: true,
+      status: 'ok',
+      profile: { totalSolved, rating: ranking?.rating, globalRanking: ranking?.globalRanking },
+    };
+  } catch (err: any) {
+    return { ok: false, status: 'error', errorMsg: err?.message || 'Network error querying LeetCode API' };
+  }
 }
 
 // ─── LeetCode: fetch latest contest history ─────────────────
 async function fetchLCContestHistory(handle: string) {
-  try {
-    let h = handle.trim();
-    if (h.includes('leetcode.com/')) {
-      const m = h.match(/leetcode\.com\/(?:u\/)?([^\/]+)/);
-      if (m) h = m[1];
-    }
+  const h = cleanLeetCodeHandle(handle);
+  if (!h) return null;
 
+  try {
     const res = await fetch('https://leetcode.com/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -161,7 +199,6 @@ async function fetchLCContestHistory(handle: string) {
     const history = data?.data?.userContestRankingHistory;
     if (!Array.isArray(history) || history.length === 0) return null;
 
-    // Find the last attended contest
     const attended = history.filter((c: any) => c.attended);
     if (attended.length === 0) return null;
     return attended[attended.length - 1];
@@ -186,7 +223,7 @@ export async function POST(request: NextRequest) {
   // Fetch all approved non-admin users with handles
   const { data: users, error: usersError } = await supabase
     .from('users')
-    .select('id, cf_handle, lc_handle')
+    .select('id, full_name, email, cf_handle, lc_handle')
     .eq('approval_status', 'approved')
     .neq('role', 'admin');
 
@@ -207,6 +244,17 @@ export async function POST(request: NextRequest) {
 
   let synced = 0;
   const errors: string[] = [];
+  const issues: Array<{
+    user_id: string;
+    full_name: string;
+    email: string;
+    lc_handle: string;
+    lc_status: PlatformSyncStatus;
+    lc_error_msg?: string | null;
+    cf_handle: string;
+    cf_status: PlatformSyncStatus;
+    cf_error_msg?: string | null;
+  }> = [];
 
   // Process each user (sequentially to avoid rate limiting)
   for (const u of users) {
@@ -214,57 +262,88 @@ export async function POST(request: NextRequest) {
       const statsPayload: any = {
         user_id: u.id,
         synced_at: new Date().toISOString(),
+        lc_status: 'unknown',
+        cf_status: 'unknown',
+        lc_error_msg: null,
+        cf_error_msg: null,
       };
 
+      const cfClean = cleanCodeforcesHandle(u.cf_handle);
+      const lcClean = cleanLeetCodeHandle(u.lc_handle);
+
       // ── Codeforces ──
-      if (u.cf_handle) {
-        // Fetch in parallel for same user
-        const [cfInfo, cfLatest, cfSolved] = await Promise.all([
-          fetchCFInfo(u.cf_handle),
-          fetchCFRating(u.cf_handle),
-          fetchCFSolved(u.cf_handle),
+      if (!cfClean) {
+        statsPayload.cf_status = 'missing';
+        statsPayload.cf_error_msg = u.cf_handle ? 'Placeholder or invalid Codeforces handle' : 'No Codeforces handle configured';
+      } else {
+        const [cfInfoResult, cfLatest, cfSolved] = await Promise.all([
+          fetchCFInfo(cfClean),
+          fetchCFRating(cfClean),
+          fetchCFSolved(cfClean),
         ]);
 
-        if (cfInfo) {
-          statsPayload.cf_rating = cfInfo.rating || 0;
-          statsPayload.cf_max_rating = cfInfo.maxRating || 0;
-        }
+        statsPayload.cf_status = cfInfoResult.status;
+        statsPayload.cf_error_msg = cfInfoResult.errorMsg || null;
 
-        statsPayload.cf_total_solved = cfSolved;
+        if (cfInfoResult.ok && cfInfoResult.info) {
+          statsPayload.cf_rating = cfInfoResult.info.rating || 0;
+          statsPayload.cf_max_rating = cfInfoResult.info.maxRating || 0;
+          statsPayload.cf_total_solved = cfSolved;
 
-        if (cfLatest) {
-          statsPayload.cf_latest_contest_name = cfLatest.contestName;
-          statsPayload.cf_latest_contest_rank = cfLatest.rank;
-          statsPayload.cf_latest_contest_rating = cfLatest.newRating;
-          statsPayload.cf_latest_contest_date = new Date(cfLatest.ratingUpdateTimeSeconds * 1000).toISOString();
+          if (cfLatest) {
+            statsPayload.cf_latest_contest_name = cfLatest.contestName;
+            statsPayload.cf_latest_contest_rank = cfLatest.rank;
+            statsPayload.cf_latest_contest_rating = cfLatest.newRating;
+            statsPayload.cf_latest_contest_date = new Date(cfLatest.ratingUpdateTimeSeconds * 1000).toISOString();
+          }
         }
       }
 
       // ── LeetCode ──
-      if (u.lc_handle) {
-        const [lcProfile, lcLatest] = await Promise.all([
-          fetchLCProfile(u.lc_handle),
-          fetchLCContestHistory(u.lc_handle),
+      if (!lcClean) {
+        statsPayload.lc_status = 'missing';
+        statsPayload.lc_error_msg = u.lc_handle ? 'Placeholder or invalid LeetCode handle' : 'No LeetCode handle configured';
+      } else {
+        const [lcProfileResult, lcLatest] = await Promise.all([
+          fetchLCProfile(lcClean),
+          fetchLCContestHistory(lcClean),
         ]);
 
-        if (lcProfile) {
-          statsPayload.lc_rating = lcProfile.rating || 0;
-          statsPayload.lc_total_solved = lcProfile.totalSolved || 0;
-        }
+        statsPayload.lc_status = lcProfileResult.status;
+        statsPayload.lc_error_msg = lcProfileResult.errorMsg || null;
 
-        if (lcLatest) {
-          statsPayload.lc_latest_contest_name = lcLatest.contest?.title;
-          statsPayload.lc_latest_contest_rank = lcLatest.ranking;
-          statsPayload.lc_latest_contest_rating = lcLatest.rating;
-          statsPayload.lc_latest_contest_solved = lcLatest.problemsSolved;
-          statsPayload.lc_latest_contest_date = lcLatest.contest?.startTime
-            ? new Date(lcLatest.contest.startTime * 1000).toISOString()
-            : null;
+        if (lcProfileResult.ok && lcProfileResult.profile) {
+          statsPayload.lc_rating = lcProfileResult.profile.rating || 0;
+          statsPayload.lc_total_solved = lcProfileResult.profile.totalSolved || 0;
+
+          if (lcLatest) {
+            statsPayload.lc_latest_contest_name = lcLatest.contest?.title;
+            statsPayload.lc_latest_contest_rank = lcLatest.ranking;
+            statsPayload.lc_latest_contest_rating = lcLatest.rating;
+            statsPayload.lc_latest_contest_solved = lcLatest.problemsSolved;
+            statsPayload.lc_latest_contest_date = lcLatest.contest?.startTime
+              ? new Date(lcLatest.contest.startTime * 1000).toISOString()
+              : null;
+          }
         }
       }
 
+      // Check if user has sync or privacy issues
+      if (statsPayload.lc_status !== 'ok' || statsPayload.cf_status !== 'ok') {
+        issues.push({
+          user_id: u.id,
+          full_name: u.full_name,
+          email: u.email,
+          lc_handle: u.lc_handle || '',
+          lc_status: statsPayload.lc_status,
+          lc_error_msg: statsPayload.lc_error_msg,
+          cf_handle: u.cf_handle || '',
+          cf_status: statsPayload.cf_status,
+          cf_error_msg: statsPayload.cf_error_msg,
+        });
+      }
+
       // ── Streak calculation ──
-      // We calculate streak based on task completions from the tasks table
       const { data: completedTasks } = await supabase
         .from('tasks')
         .select('completed_at')
@@ -274,7 +353,6 @@ export async function POST(request: NextRequest) {
         .order('completed_at', { ascending: false });
 
       if (completedTasks && completedTasks.length > 0) {
-        // Get unique dates (in local date strings)
         const uniqueDates = Array.from(new Set(
           completedTasks.map(t => new Date(t.completed_at).toISOString().split('T')[0])
         )).sort().reverse();
@@ -289,12 +367,11 @@ export async function POST(request: NextRequest) {
           for (const d of uniqueDates) {
             if (d === checkDate) {
               streak++;
-              // Move to the previous day
               const prevDate: Date = new Date(checkDate);
               prevDate.setDate(prevDate.getDate() - 1);
               checkDate = prevDate.toISOString().split('T')[0];
             } else if (d < checkDate!) {
-              break; // Gap found
+              break;
             }
           }
         }
@@ -302,7 +379,6 @@ export async function POST(request: NextRequest) {
         statsPayload.current_streak = streak;
         statsPayload.last_solve_date = uniqueDates[0];
 
-        // Check if current streak > stored max
         const { data: existing } = await supabase
           .from('user_stats')
           .select('max_streak')
@@ -312,10 +388,21 @@ export async function POST(request: NextRequest) {
         statsPayload.max_streak = Math.max(streak, existing?.max_streak || 0);
       }
 
-      // Upsert into user_stats
-      const { error: upsertError } = await supabase
+      // Upsert into user_stats with graceful schema fallback
+      let { error: upsertError } = await supabase
         .from('user_stats')
         .upsert(statsPayload, { onConflict: 'user_id' });
+
+      if (upsertError && (upsertError.message?.includes('lc_status') || upsertError.message?.includes('cf_status'))) {
+        // Fallback if DB table hasn't added diagnostic columns yet
+        const fallbackPayload = { ...statsPayload };
+        delete fallbackPayload.lc_status;
+        delete fallbackPayload.lc_error_msg;
+        delete fallbackPayload.cf_status;
+        delete fallbackPayload.cf_error_msg;
+        const res = await supabase.from('user_stats').upsert(fallbackPayload, { onConflict: 'user_id' });
+        upsertError = res.error;
+      }
 
       if (upsertError) {
         errors.push(`${u.id}: ${upsertError.message}`);
@@ -331,11 +418,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const issueMsg = issues.length > 0 ? ` Detected ${issues.length} profile(s) with private settings or invalid handles.` : '';
+
   return NextResponse.json({
     synced,
     total: users.length,
+    issues,
     errors: errors.length > 0 ? errors : undefined,
-    message: `Synced ${synced}/${users.length} users successfully.`,
+    message: `Synced ${synced}/${users.length} users successfully.${issueMsg}`,
   });
 }
 
@@ -447,7 +537,7 @@ export async function GET(request: NextRequest) {
 
   const { data: stats, error } = await supabase
     .from('user_stats')
-    .select('*, user:users!user_stats_user_id_fkey(id, full_name, year, cf_handle, lc_handle, role, approval_status)')
+    .select('*, user:users!user_stats_user_id_fkey(id, full_name, email, year, cf_handle, lc_handle, role, approval_status)')
     .order('synced_at', { ascending: false });
 
   if (error) {
@@ -461,8 +551,24 @@ export async function GET(request: NextRequest) {
 
   const latestContests = await getLatestContests();
 
+  const issues = activeStats
+    .filter((s: any) => (s.lc_status && s.lc_status !== 'ok') || (s.cf_status && s.cf_status !== 'ok'))
+    .map((s: any) => ({
+      user_id: s.user_id,
+      full_name: s.user?.full_name,
+      email: s.user?.email,
+      year: s.user?.year,
+      lc_handle: s.user?.lc_handle,
+      lc_status: s.lc_status,
+      lc_error_msg: s.lc_error_msg,
+      cf_handle: s.user?.cf_handle,
+      cf_status: s.cf_status,
+      cf_error_msg: s.cf_error_msg,
+    }));
+
   return NextResponse.json({
     stats: activeStats,
+    issues,
     latest_contests: latestContests,
   });
 }

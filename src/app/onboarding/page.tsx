@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { Code2, CheckCircle2, Loader2, ArrowRight, LogOut, ShieldCheck } from 'lucide-react';
+import { Code2, CheckCircle2, Loader2, ArrowRight, LogOut, ShieldCheck, AlertCircle } from 'lucide-react';
+import { cleanCodeforcesHandle, cleanLeetCodeHandle } from '@/lib/handles';
 
 export default function OnboardingPage() {
   const [user, setUser] = useState<any>(null);
@@ -102,8 +103,8 @@ export default function OnboardingPage() {
         year: formData.year,
         branch: formData.branch,
         contact_number: formData.contact_number.trim(),
-        cf_handle: formData.cf_handle.trim(),
-        lc_handle: formData.lc_handle.trim(),
+        cf_handle: cleanCodeforcesHandle(formData.cf_handle) || formData.cf_handle.trim(),
+        lc_handle: cleanLeetCodeHandle(formData.lc_handle) || formData.lc_handle.trim(),
       },
       { onConflict: 'id' }
     );
@@ -264,10 +265,8 @@ export default function OnboardingPage() {
                   value={formData.cf_handle}
                   onChange={handleChange}
                   required
-                  pattern="^[A-Za-z0-9_.-]+$"
-                  title="Username only"
                   className="input-field"
-                  placeholder="e.g. tourist"
+                  placeholder="e.g. tourist or profile link"
                 />
               </div>
 
@@ -281,12 +280,17 @@ export default function OnboardingPage() {
                   value={formData.lc_handle}
                   onChange={handleChange}
                   required
-                  pattern="^[A-Za-z0-9_.-]+$"
-                  title="Username only"
                   className="input-field"
-                  placeholder="e.g. neetcode"
+                  placeholder="e.g. neetcode or profile link"
                 />
               </div>
+            </div>
+
+            <div className="rounded-xl bg-amber-50/70 border border-amber-200/60 p-3 text-xs text-amber-900 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong>Important:</strong> Please ensure your <strong>LeetCode profile &amp; submissions</strong> are set to <strong>Public</strong> in your LeetCode Privacy settings so your stats and tasks can sync automatically.
+              </p>
             </div>
 
             {error && (
