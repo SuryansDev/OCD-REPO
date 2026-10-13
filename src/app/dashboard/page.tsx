@@ -11,8 +11,14 @@ import type { UserProfile, Task } from '@/lib/types';
 import {
   Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2,
   Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink,
-  Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight
+  Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight, Check
 } from 'lucide-react';
+import {
+  cleanCodeforcesHandle,
+  cleanLeetCodeHandle,
+  getCodeforcesProfileUrl,
+  getLeetCodeProfileUrl,
+} from '@/lib/handles';
 
 const getTaskLink = (task: any) => {
   if (task.platform === 'LeetCode') {
@@ -62,6 +68,10 @@ export default function Dashboard() {
   const [selectedMentorId, setSelectedMentorId] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+
+  // Incoming requests (when students request me as mentor)
+  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+  const [requestActionLoadingId, setRequestActionLoadingId] = useState<number | null>(null);
 
   // Modals state
   const [selectedTaskGroup, setSelectedTaskGroup] = useState<any | null>(null);
@@ -129,6 +139,15 @@ export default function Dashboard() {
     // Fetch pending requests I made (asking someone to be my mentor)
     const { data: reqs } = await supabase.from('mentorship_requests').select('*, mentor:users!mentorship_requests_mentor_id_fkey(full_name)').eq('mentee_id', user.id).eq('status', 'pending');
     if (reqs) setPendingRequests(reqs);
+
+    // Fetch incoming pending requests (students asking me to be their mentor)
+    const { data: incReqs } = await supabase
+      .from('mentorship_requests')
+      .select('id, mentee_id, mentor_id, status, created_at, mentee:users!mentorship_requests_mentee_id_fkey(id, full_name, email, year, branch, roll_number, cf_handle, lc_handle)')
+      .eq('mentor_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (incReqs) setIncomingRequests(incReqs);
 
     // Fetch leaderboard data
     try {
@@ -253,18 +272,103 @@ export default function Dashboard() {
     if (!selectedMentorId) return;
     setRequesting(true);
 
-    // Check if already requested or linked
-    const { error } = await supabase.from('mentorship_requests').insert([
-      { mentor_id: selectedMentorId, mentee_id: profile!.id }
-    ]);
+    // Upsert mentorship request so if re-requesting after previous rejection it reactivates
+    const { error } = await supabase.from('mentorship_requests').upsert([
+      { mentor_id: selectedMentorId, mentee_id: profile!.id, status: 'pending' }
+    ], { onConflict: 'mentor_id,mentee_id' });
 
     if (error) {
-      alert('Failed to request or request already exists.');
+      alert(`Failed to send request: ${error.message}`);
     } else {
       setSelectedMentorId('');
       fetchData();
     }
     setRequesting(false);
+  };
+
+  const handleAcceptMenteeRequest = async (requestId: number, menteeId: string, menteeName: string) => {
+    if (!profile) return;
+    setRequestActionLoadingId(requestId);
+
+    try {
+      // 1. Insert mentorship relation (or ignore if already exists)
+      const { data: inserted, error: insertError } = await supabase
+        .from('mentorships')
+        .upsert(
+          { mentor_id: profile.id, mentee_id: menteeId },
+          { onConflict: 'mentor_id,mentee_id' }
+        )
+        .select();
+
+      if (insertError) {
+        alert(`Could not accept request: ${insertError.message}`);
+        setRequestActionLoadingId(null);
+        return;
+      }
+
+      // 2. Mark mentorship_request as 'approved'
+      const { error: updateError } = await supabase
+        .from('mentorship_requests')
+        .update({ status: 'approved' })
+        .eq('id', requestId);
+
+      if (updateError) {
+        console.warn('Could not update request status:', updateError);
+      }
+
+      setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
+      await fetchData();
+    } catch (err: any) {
+      alert(`Error accepting request: ${err?.message || 'Something went wrong'}`);
+    } finally {
+      setRequestActionLoadingId(null);
+    }
+  };
+
+  const handleDeclineMenteeRequest = async (requestId: number, menteeName: string) => {
+    if (!confirm(`Are you sure you want to decline ${menteeName}'s mentorship request?`)) return;
+    setRequestActionLoadingId(requestId);
+
+    try {
+      const { error } = await supabase
+        .from('mentorship_requests')
+        .update({ status: 'rejected' })
+        .eq('id', requestId);
+
+      if (error) {
+        alert(`Could not decline request: ${error.message}`);
+      } else {
+        setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
+        await fetchData();
+      }
+    } catch (err: any) {
+      alert(`Error: ${err?.message || 'Something went wrong'}`);
+    } finally {
+      setRequestActionLoadingId(null);
+    }
+  };
+
+  const handleCancelMyRequest = async (requestId: number) => {
+    if (!confirm('Are you sure you want to cancel this mentorship request?')) return;
+    setRequestActionLoadingId(requestId);
+
+    try {
+      const { error } = await supabase
+        .from('mentorship_requests')
+        .delete()
+        .eq('id', requestId);
+
+      if (error) {
+        alert(`Could not cancel request: ${error.message}`);
+      } else {
+        setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+        await fetchData();
+      }
+    } catch (err: any) {
+      alert(`Error: ${err?.message || 'Something went wrong'}`);
+    } finally {
+      setRequestActionLoadingId(null);
+    }
   };
 
   const handleAcknowledgePromotion = async () => {
@@ -1118,13 +1222,39 @@ export default function Dashboard() {
                     </p>
                   </div>
                 </div>
+                {incomingRequests.length > 0 && (
+                  <a
+                    href="#incoming-requests"
+                    className="inline-flex items-center gap-1 text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 px-2.5 py-1 rounded-full border border-amber-300 transition-colors animate-pulse"
+                    title="Click to view pending requests"
+                  >
+                    {incomingRequests.length} pending request{incomingRequests.length > 1 ? 's' : ''}
+                  </a>
+                )}
               </div>
+
+              {incomingRequests.length > 0 && (
+                <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-900 flex items-center justify-between shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      You have <strong>{incomingRequests.length}</strong> prospective mentee request{incomingRequests.length > 1 ? 's' : ''}.
+                    </span>
+                  </div>
+                  <a
+                    href="#incoming-requests"
+                    className="font-bold text-amber-700 hover:text-amber-950 underline shrink-0 ml-2"
+                  >
+                    Review &rarr;
+                  </a>
+                </div>
+              )}
 
               {myMentees.length === 0 ? (
                 <div className="p-6 text-center text-surface-400 border border-dashed border-surface-200 rounded-xl">
                   <UserPlus className="w-7 h-7 text-surface-300 mx-auto mb-2" />
                   <p className="text-sm font-semibold text-surface-600">No mentees in your cohort yet</p>
-                  <p className="text-xs text-surface-400 mt-1">When students request you and an admin approves, they will appear here.</p>
+                  <p className="text-xs text-surface-400 mt-1">When students request you and you accept their request, they will appear here.</p>
                 </div>
               ) : (
                 <ul className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
@@ -1168,7 +1298,7 @@ export default function Dashboard() {
         </section>
 
 
-        {/* --- BOTTOM SECTION: MENTORSHIP MANAGEMENT (As earlier) --- */}
+        {/* --- BOTTOM SECTION: MENTORSHIP MANAGEMENT --- */}
         <section className="animate-fade-in pt-8 border-t border-surface-200" style={{ animationDelay: '0.3s' }}>
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
@@ -1177,12 +1307,145 @@ export default function Dashboard() {
             <h2 className="text-2xl font-bold text-surface-900">Mentorship Management</h2>
           </div>
 
+          {/* Incoming Mentorship Requests for this Mentor */}
+          {incomingRequests.length > 0 && (
+            <div id="incoming-requests" className="card p-6 border-amber-300 border-2 bg-gradient-to-r from-amber-50/60 via-white to-amber-50/30 mb-8 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5 pb-3 border-b border-amber-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-100 rounded-xl text-amber-700 shadow-xs">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-surface-900 flex items-center gap-2">
+                      Incoming Mentorship Requests
+                      <span className="bg-amber-100 text-amber-900 text-xs font-black px-2.5 py-0.5 rounded-full border border-amber-300">
+                        {incomingRequests.length} pending
+                      </span>
+                    </h3>
+                    <p className="text-xs text-surface-500 mt-0.5">
+                      Students who want you as their mentor. Review their details and accept or decline.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {incomingRequests.map((req) => {
+                  const m = req.mentee;
+                  const cfUrl = getCodeforcesProfileUrl(m?.cf_handle);
+                  const lcUrl = getLeetCodeProfileUrl(m?.lc_handle);
+                  const isActioning = requestActionLoadingId === req.id;
+
+                  return (
+                    <div
+                      key={req.id}
+                      className="bg-white rounded-xl border border-surface-200 p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-shadow"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-surface-900 text-base leading-snug truncate">
+                              <Link
+                                href={`/profile?id=${m?.id}`}
+                                className="hover:text-brand-600 hover:underline transition-colors"
+                                title="View student profile"
+                              >
+                                {m?.full_name || 'Prospective Mentee'}
+                              </Link>
+                            </h4>
+                            <p className="text-xs text-surface-500 mt-0.5">
+                              Year {m?.year || 'N/A'}{m?.branch ? ` • ${m.branch}` : ''}
+                            </p>
+                          </div>
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                            Pending
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-surface-500 mt-2 truncate">
+                          {m?.email}
+                        </div>
+                        {m?.roll_number && (
+                          <div className="text-[11px] text-surface-400 mt-0.5">
+                            Roll: <span className="font-mono">{m.roll_number}</span>
+                          </div>
+                        )}
+
+                        {/* Coding Profile Badges */}
+                        <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-surface-100">
+                          {lcUrl ? (
+                            <a
+                              href={lcUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 px-2 py-1 rounded-md border border-amber-200 transition-colors"
+                              title={`LeetCode: ${cleanLeetCodeHandle(m?.lc_handle)}`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              LC: {cleanLeetCodeHandle(m?.lc_handle)}
+                              <ExternalLink className="w-3 h-3 opacity-60" />
+                            </a>
+                          ) : (
+                            <span className="text-[11px] text-surface-400 italic">No LC handle</span>
+                          )}
+
+                          {cfUrl ? (
+                            <a
+                              href={cfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-50 text-blue-800 hover:bg-blue-100 px-2 py-1 rounded-md border border-blue-200 transition-colors"
+                              title={`Codeforces: ${cleanCodeforcesHandle(m?.cf_handle)}`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                              CF: {cleanCodeforcesHandle(m?.cf_handle)}
+                              <ExternalLink className="w-3 h-3 opacity-60" />
+                            </a>
+                          ) : (
+                            <span className="text-[11px] text-surface-400 italic">No CF handle</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Accept & Decline Buttons */}
+                      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-surface-100">
+                        <button
+                          onClick={() => handleAcceptMenteeRequest(req.id, req.mentee_id, m?.full_name || 'student')}
+                          disabled={isActioning}
+                          className="flex-1 py-1.5 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-xs disabled:opacity-50"
+                        >
+                          {isActioning ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => handleDeclineMenteeRequest(req.id, m?.full_name || 'student')}
+                          disabled={isActioning}
+                          className="btn-secondary py-1.5 px-3 text-xs text-surface-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="grid md:grid-cols-2 gap-8">
 
             {/* Request Mentor */}
             <div className="card p-6 flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-bold text-surface-900 mb-4">Request a Mentor</h3>
+                <h3 className="text-lg font-bold text-surface-900 mb-1">Request a Mentor</h3>
+                <p className="text-xs text-surface-500 mb-4">
+                  Requests go directly to the mentor to accept or decline.
+                </p>
 
                 <form onSubmit={handleRequestMentor} className="space-y-3">
                   <div className="flex gap-2">
@@ -1208,8 +1471,21 @@ export default function Dashboard() {
                     <p className="text-xs font-semibold text-surface-500 uppercase mb-2">Pending Requests</p>
                     <ul className="space-y-2">
                       {pendingRequests.map(r => (
-                        <li key={r.id} className="flex items-center gap-2 text-sm text-surface-600 bg-surface-50 p-2 rounded-lg border border-surface-200">
-                          <Clock className="w-4 h-4 text-amber-500" /> Waiting for Admin to approve mentor: <span className="font-medium text-surface-900">{r.mentor?.full_name}</span>
+                        <li key={r.id} className="flex items-center justify-between gap-2 text-sm text-surface-600 bg-surface-50 p-2.5 rounded-lg border border-surface-200">
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+                            <span className="truncate">
+                              Waiting for <span className="font-semibold text-surface-900">{r.mentor?.full_name || 'mentor'}</span> to accept your request
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleCancelMyRequest(r.id)}
+                            disabled={requestActionLoadingId === r.id}
+                            className="text-xs text-red-600 hover:text-red-700 font-semibold px-2 py-1 rounded hover:bg-red-50 transition-colors shrink-0 disabled:opacity-50"
+                            title="Cancel request"
+                          >
+                            {requestActionLoadingId === r.id ? 'Cancelling...' : 'Cancel'}
+                          </button>
                         </li>
                       ))}
                     </ul>

@@ -19,7 +19,6 @@ export default function AdminDashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [userStats, setUserStats] = useState<Record<string, UserStats>>({});
-  const [mentorshipRequests, setMentorshipRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingRankings, setSyncingRankings] = useState(false);
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
@@ -57,14 +56,6 @@ export default function AdminDashboard() {
       setUserStats(statsMap);
     }
 
-    // Fetch mentorship requests
-    const { data: reqs } = await supabase.from('mentorship_requests').select(`
-      id, status, created_at, mentor_id, mentee_id,
-      mentor:users!mentorship_requests_mentor_id_fkey(id, full_name, email, year),
-      mentee:users!mentorship_requests_mentee_id_fkey(id, full_name, email, year)
-    `).order('created_at', { ascending: false });
-    if (reqs) setMentorshipRequests(reqs);
-
     setLoading(false);
   }, [supabase, router]);
 
@@ -77,14 +68,6 @@ export default function AdminDashboard() {
     if (status !== 'approved') {
       await supabase.from('user_stats').delete().eq('user_id', id);
     }
-    fetchData();
-  };
-
-  const handleMentorshipApproval = async (reqId: number, mentorId: string, menteeId: string, status: ApprovalStatus) => {
-    if (status === 'approved') {
-      await supabase.from('mentorships').insert([{ mentor_id: mentorId, mentee_id: menteeId }]);
-    }
-    await supabase.from('mentorship_requests').update({ status }).eq('id', reqId);
     fetchData();
   };
 
@@ -119,9 +102,6 @@ Please update your profile settings so your contest ratings and tasks can sync p
 
   const pendingUsers = useMemo(() => users.filter(u => u.approval_status === 'pending'), [users]);
   const otherUsers = useMemo(() => users.filter(u => u.approval_status !== 'pending'), [users]);
-  const pendingMentorships = useMemo(() => mentorshipRequests.filter(r => r.status === 'pending'), [mentorshipRequests]);
-  const otherMentorships = useMemo(() => mentorshipRequests.filter(r => r.status !== 'pending'), [mentorshipRequests]);
-
   // List of approved users with API sync/privacy issues
   const issueUsers = useMemo(() => {
     return otherUsers.filter(u => u.approval_status === 'approved' && isIssueUser(u));
@@ -428,67 +408,6 @@ Please update your profile settings so your contest ratings and tasks can sync p
                   {pendingUsers.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-4 py-6 text-center text-surface-400">No pending account approvals.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        {/* ─── SECTION 3: MENTORSHIP REQUESTS ──────────────────────────────── */}
-        <section className="mb-12">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <LinkIcon className="text-brand-500 w-5 h-5" /> Mentorship Requests ({pendingMentorships.length})
-          </h2>
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-surface-100 text-surface-600 font-semibold uppercase text-xs">
-                  <tr>
-                    <th className="px-4 py-3">Mentee (Requestor)</th>
-                    <th className="px-4 py-3">Mentor (Requested)</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-200">
-                  {pendingMentorships.map(r => (
-                    <tr key={r.id} className="hover:bg-surface-50">
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-surface-900">{r.mentee?.full_name}</div>
-                        <div className="text-xs text-surface-500">Year: {r.mentee?.year}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-surface-900">{r.mentor?.full_name}</div>
-                        <div className="text-xs text-surface-500">Year: {r.mentor?.year}</div>
-                      </td>
-                      <td className="px-4 py-3 capitalize text-amber-600 font-medium text-xs">{r.status}</td>
-                      <td className="px-4 py-3 flex justify-end gap-2">
-                        <button onClick={() => handleMentorshipApproval(r.id, r.mentor.id, r.mentee.id, 'approved')} className="text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
-                          <CheckCircle className="w-4 h-4" /> Approve
-                        </button>
-                        <button onClick={() => handleMentorshipApproval(r.id, r.mentor.id, r.mentee.id, 'rejected')} className="text-red-600 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
-                          <XCircle className="w-4 h-4" /> Reject
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {otherMentorships.map(r => (
-                    <tr key={r.id} className="bg-surface-50/50">
-                      <td className="px-4 py-3 text-surface-600">{r.mentee?.full_name}</td>
-                      <td className="px-4 py-3 text-surface-600">{r.mentor?.full_name}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3"></td>
-                    </tr>
-                  ))}
-                  {mentorshipRequests.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-surface-400">No mentorship requests yet.</td>
                     </tr>
                   )}
                 </tbody>

@@ -55,7 +55,7 @@ export interface MentorshipWithMentee extends Mentorship {
   mentee: Pick<UserProfile, 'id' | 'full_name' | 'email' | 'cf_handle' | 'lc_handle'>;
 }
 
-export type PlatformSyncStatus = 'ok' | 'private_or_not_found' | 'missing' | 'error' | 'unknown';
+export type PlatformSyncStatus = 'ok' | 'private_or_not_found' | 'not_found_or_private' | 'missing' | 'error' | 'unknown';
 
 export interface UserStats {
   id?: number;

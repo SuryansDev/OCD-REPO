@@ -44,7 +44,7 @@ async function fetchCFInfo(handle: string): Promise<CFInfoResult> {
       const isNotFound = comment.toLowerCase().includes('not found');
       return {
         ok: false,
-        status: isNotFound ? 'not_found_or_private' : 'error',
+        status: isNotFound ? 'private_or_not_found' : 'error',
         errorMsg: comment,
       };
     }

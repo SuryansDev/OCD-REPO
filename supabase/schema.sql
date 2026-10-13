@@ -93,7 +93,7 @@ CREATE POLICY "Users can insert own profile" ON public.users FOR INSERT WITH CHE
 -- ── MENTORSHIPS ─────────────────────────────────────────────
 CREATE POLICY "Admins can view all mentorships" ON public.mentorships FOR SELECT USING (public.is_admin());
 CREATE POLICY "Users can view own mentorships" ON public.mentorships FOR SELECT USING (mentor_id = auth.uid() OR mentee_id = auth.uid());
-CREATE POLICY "Admins can insert mentorships" ON public.mentorships FOR INSERT WITH CHECK (public.is_admin());
+CREATE POLICY "Mentors or Admins can insert mentorships" ON public.mentorships FOR INSERT WITH CHECK (mentor_id = auth.uid() OR public.is_admin());
 CREATE POLICY "Mentors or Admins can delete mentorships" ON public.mentorships FOR DELETE USING (mentor_id = auth.uid() OR public.is_admin());
 
 -- ── MENTORSHIP REQUESTS ───────────────────────────────────
@@ -101,7 +101,7 @@ ALTER TABLE public.mentorship_requests ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admins can view all mentorship requests" ON public.mentorship_requests FOR SELECT USING (public.is_admin());
 CREATE POLICY "Users can view own requests" ON public.mentorship_requests FOR SELECT USING (mentor_id = auth.uid() OR mentee_id = auth.uid());
 CREATE POLICY "Users can create mentorship requests" ON public.mentorship_requests FOR INSERT WITH CHECK (mentee_id = auth.uid() OR mentor_id = auth.uid());
-CREATE POLICY "Admins can update mentorship requests" ON public.mentorship_requests FOR UPDATE USING (public.is_admin());
+CREATE POLICY "Mentors or Admins can update mentorship requests" ON public.mentorship_requests FOR UPDATE USING (mentor_id = auth.uid() OR public.is_admin());
 CREATE POLICY "Users or Admins can delete mentorship requests" ON public.mentorship_requests FOR DELETE USING (mentor_id = auth.uid() OR mentee_id = auth.uid() OR public.is_admin());
 
 -- ── TASKS ───────────────────────────────────────────────────
