@@ -85,6 +85,7 @@ export default function Dashboard() {
     cf?: { id?: number; name?: string; relatedNames?: string[]; startTime?: string; totalContestParticipants?: number | null };
   }>({});
   const [leaderboardTab, setLeaderboardTab] = useState<'streak' | 'lc_rating' | 'cf_rating' | 'total_solved' | 'lc_contest' | 'cf_contest'>('streak');
+  const [leaderboardYearFilter, setLeaderboardYearFilter] = useState<'all' | '1' | '2' | '3' | '4' | 'Alumni'>('all');
   const [leaderboardPage, setLeaderboardPage] = useState(1);
 
   const [loading, setLoading] = useState(true);
@@ -435,18 +436,28 @@ export default function Dashboard() {
     setLeaderboardPage(1);
   };
 
-  // Sorted leaderboard entries based on active tab
+  const handleYearFilterChange = (year: typeof leaderboardYearFilter) => {
+    setLeaderboardYearFilter(year);
+    setLeaderboardPage(1);
+  };
+
+  // Sorted leaderboard entries based on active tab and academic year
   const sortedLeaderboard = useMemo(() => {
     let sorted = [...leaderboardData];
 
+    // Filter by academic year
+    if (leaderboardYearFilter !== 'all') {
+      sorted = sorted.filter((s) => s.user?.year === leaderboardYearFilter);
+    }
+
     const targetLCName = latestContests.lc?.title || (
-      sorted
+      leaderboardData
         .filter((s) => s.lc_latest_contest_date)
         .sort((a, b) => new Date(b.lc_latest_contest_date).getTime() - new Date(a.lc_latest_contest_date).getTime())[0]?.lc_latest_contest_name
     ) || '';
 
     const targetCFName = latestContests.cf?.name || (
-      sorted
+      leaderboardData
         .filter((s) => s.cf_latest_contest_date)
         .sort((a, b) => new Date(b.cf_latest_contest_date).getTime() - new Date(a.cf_latest_contest_date).getTime())[0]?.cf_latest_contest_name
     ) || '';
@@ -472,7 +483,7 @@ export default function Dashboard() {
     }
 
     return sorted;
-  }, [leaderboardData, leaderboardTab, latestContests]);
+  }, [leaderboardData, leaderboardTab, latestContests, leaderboardYearFilter]);
 
   const LEADERBOARD_PER_PAGE = 5;
   const totalLeaderboardPages = Math.max(1, Math.ceil(sortedLeaderboard.length / LEADERBOARD_PER_PAGE));
@@ -502,8 +513,13 @@ export default function Dashboard() {
     ? latestContests.cf.relatedNames
     : (targetCFName ? [targetCFName] : []);
 
-  const lcParticipantsCount = leaderboardData.filter((s) => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName).length;
-  const cfParticipantsCount = leaderboardData.filter((s) => s.cf_latest_contest_name && (targetCFNames.length > 0 ? targetCFNames.includes(s.cf_latest_contest_name) : s.cf_latest_contest_name === targetCFName)).length;
+  const lcParticipantsCount = leaderboardData
+    .filter((s) => leaderboardYearFilter === 'all' || s.user?.year === leaderboardYearFilter)
+    .filter((s) => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName).length;
+
+  const cfParticipantsCount = leaderboardData
+    .filter((s) => leaderboardYearFilter === 'all' || s.user?.year === leaderboardYearFilter)
+    .filter((s) => s.cf_latest_contest_name && (targetCFNames.length > 0 ? targetCFNames.includes(s.cf_latest_contest_name) : s.cf_latest_contest_name === targetCFName)).length;
 
   if (loading) {
     return (
@@ -845,7 +861,7 @@ export default function Dashboard() {
           <div className="space-y-6">
             {/* LEADERBOARD CARD */}
             <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.2s' }}>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600 shadow-sm shadow-amber-500/10">
                     <Trophy className="w-5 h-5" />
@@ -853,9 +869,34 @@ export default function Dashboard() {
                   <div>
                     <h2 className="text-xl font-bold text-surface-900">Leaderboard</h2>
                     <p className="text-xs text-surface-400 mt-0.5">
-                      {sortedLeaderboard.length} participants ranked
+                      {sortedLeaderboard.length} participants ranked {leaderboardYearFilter !== 'all' ? `• Year ${leaderboardYearFilter}` : ''}
                     </p>
                   </div>
+                </div>
+
+                {/* Academic Year Filter Pills */}
+                <div className="inline-flex items-center gap-1 bg-surface-100/80 p-1 rounded-xl border border-surface-200/80 self-start sm:self-auto">
+                  <span className="text-[10px] font-bold text-surface-400 uppercase px-1.5 hidden md:inline">Year:</span>
+                  {([
+                    { key: 'all', label: 'All', title: 'All Years' },
+                    { key: '1', label: '1', title: '1st Year' },
+                    { key: '2', label: '2', title: '2nd Year' },
+                    { key: '3', label: '3', title: '3rd Year' },
+                    { key: '4', label: '4', title: '4th Year' },
+                    { key: 'Alumni', label: '🎓', title: 'Alumni' },
+                  ] as const).map(f => (
+                    <button
+                      key={f.key}
+                      onClick={() => handleYearFilterChange(f.key)}
+                      title={f.title}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${leaderboardYearFilter === f.key
+                        ? 'bg-white text-surface-900 shadow-xs border border-surface-200 font-extrabold'
+                        : 'text-surface-500 hover:text-surface-900 hover:bg-surface-200/60'
+                        }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -892,7 +933,7 @@ export default function Dashboard() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <span className="text-[10px] font-black uppercase tracking-wider bg-brand-600 text-white px-1.5 py-0.5 rounded-md">
-                          YOUR RANKING
+                          YOUR RANKING {leaderboardYearFilter !== 'all' ? `(YEAR ${leaderboardYearFilter})` : ''}
                         </span>
                         <span className="text-xs font-semibold text-surface-500">Year {myEntry.user?.year === 'Alumni' ? '🎓' : myEntry.user?.year}</span>
                       </div>
@@ -953,7 +994,11 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="bg-surface-50 border border-surface-200 rounded-xl p-2.5 mb-3 text-xs text-surface-500 flex items-center justify-between">
-                  <span className="font-medium">Your Ranking: Not yet ranked in this category</span>
+                  <span className="font-medium">
+                    {leaderboardYearFilter !== 'all'
+                      ? `Your Ranking: You are in Year ${profile?.year || 'N/A'} (Filtered: Year ${leaderboardYearFilter})`
+                      : 'Your Ranking: Not yet ranked in this category'}
+                  </span>
                   <span className="text-surface-400 text-[11px]">—</span>
                 </div>
               )}
@@ -1043,9 +1088,11 @@ export default function Dashboard() {
                             <Trophy className="w-8 h-8 text-surface-300 mx-auto mb-2" />
                             <p className="font-semibold text-surface-700 text-sm">No leaderboard data found</p>
                             <p className="text-xs text-surface-400 mt-1">
-                              {leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest'
-                                ? 'No participants in this contest yet.'
-                                : 'Rankings will appear once synced.'}
+                              {leaderboardYearFilter !== 'all'
+                                ? `No participants found from Year ${leaderboardYearFilter} for this category.`
+                                : leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest'
+                                  ? 'No participants in this contest yet.'
+                                  : 'Rankings will appear once synced.'}
                             </p>
                           </td>
                         </tr>

@@ -75,12 +75,12 @@ function LoginForm() {
       return;
     }
 
-    if (!profile.roll_number || !profile.year) {
-      window.location.href = '/onboarding';
-    } else if (profile.role !== 'admin' && profile.approval_status !== 'approved') {
-      window.location.href = '/pending';
-    } else if (profile.role === 'admin') {
+    if (profile.role === 'admin') {
       window.location.href = '/admin';
+    } else if (!profile.roll_number || !profile.year) {
+      window.location.href = '/onboarding';
+    } else if (profile.approval_status !== 'approved') {
+      window.location.href = '/pending';
     } else {
       window.location.href = '/dashboard';
     }

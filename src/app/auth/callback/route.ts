@@ -58,11 +58,10 @@ export async function GET(request: NextRequest) {
 
   let targetPath = '/dashboard';
 
-  if (!profile || !profile.roll_number || !profile.year) {
-    // Incomplete profile -> onboarding
-    targetPath = '/onboarding';
-  } else if (profile.role === 'admin') {
+  if (profile?.role === 'admin') {
     targetPath = '/admin';
+  } else if (!profile || !profile.roll_number || !profile.year) {
+    targetPath = '/onboarding';
   } else if (profile.approval_status !== 'approved') {
     targetPath = '/pending';
   }

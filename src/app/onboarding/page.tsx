@@ -45,10 +45,13 @@ export default function OnboardingPage() {
         .eq('id', user.id)
         .single();
 
+      if (profile?.role === 'admin') {
+        router.push('/admin');
+        return;
+      }
+
       if (profile && profile.roll_number && profile.year) {
-        if (profile.role === 'admin') {
-          router.push('/admin');
-        } else if (profile.approval_status === 'approved') {
+        if (profile.approval_status === 'approved') {
           router.push('/dashboard');
         } else {
           router.push('/pending');
