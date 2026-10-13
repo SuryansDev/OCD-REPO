@@ -28,17 +28,13 @@ export async function updateSession(request: NextRequest) {
   );
 
   // Refresh the session — this keeps the user logged in
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-  console.log('Middleware Path:', request.nextUrl.pathname);
-  console.log('All Cookies:', request.cookies.getAll().map(c => c.name));
-  console.log('User ID:', user?.id, 'User Error:', userError?.message);
+  const { data: { user } } = await supabase.auth.getUser();
 
   const isProtected = request.nextUrl.pathname.startsWith('/dashboard') ||
-                      request.nextUrl.pathname.startsWith('/admin');
+                      request.nextUrl.pathname.startsWith('/admin') ||
+                      request.nextUrl.pathname.startsWith('/profile');
 
   if (isProtected && !user) {
-    console.log('Redirecting to /login because !user');
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }

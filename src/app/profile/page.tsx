@@ -112,11 +112,11 @@ function ProfileContent() {
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         {/* Back Button */}
         <button 
-          onClick={() => router.push('/dashboard')}
+          onClick={() => router.push(currentUser?.role === 'admin' ? '/admin' : '/dashboard')}
           className="flex items-center gap-2 text-sm text-surface-500 hover:text-brand-600 transition-colors mb-6 group cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          Back to Dashboard
+          Back to {currentUser?.role === 'admin' ? 'Admin Panel' : 'Dashboard'}
         </button>
 
         {/* Profile Header */}

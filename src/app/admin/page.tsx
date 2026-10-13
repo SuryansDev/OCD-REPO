@@ -212,7 +212,7 @@ export default function AdminDashboard() {
               onClick={async () => {
                 if (!confirm('Are you absolutely sure? This will shift EVERY user in the database up one year.')) return;
                 
-                const updates = otherUsers.map(u => {
+                const updates = otherUsers.filter(u => u.role !== 'admin').map(u => {
                   let next = u.year || '';
                   const yearStr = u.year || '';
                   const currentYearNum = parseInt(yearStr.replace(/\D/g, ''), 10);

@@ -45,15 +45,27 @@ export async function POST(request: NextRequest) {
   let problemSlugOrId = '';
 
   try {
-    const url = new URL(link);
+    const url = new URL(link.trim());
     if (url.hostname.includes('codeforces.com')) {
       platform = 'Codeforces';
-      const match = link.match(/problem\/(\d+)\/([A-Za-z0-9]+)/);
-      if (match) problemSlugOrId = `${match[1]}${match[2]}`;
+      // Match contest / gym: /contest/1800/problem/A or /gym/104000/problem/B
+      const contestMatch = link.match(/(?:contest|gym)\/(\d+)\/problem\/([A-Za-z0-9]+)/i);
+      // Match problemset: /problemset/problem/1800/A
+      const problemsetMatch = link.match(/problemset\/problem\/(\d+)\/([A-Za-z0-9]+)/i);
+      // Fallback: /problem/1800/A
+      const fallbackMatch = link.match(/problem\/(\d+)\/([A-Za-z0-9]+)/i);
+
+      const match = contestMatch || problemsetMatch || fallbackMatch;
+      if (match) {
+        problemSlugOrId = `${match[1]}${match[2].toUpperCase()}`;
+      }
     } else if (url.hostname.includes('leetcode.com')) {
       platform = 'LeetCode';
-      const match = link.match(/problems\/([^\/]+)/);
-      if (match) problemSlugOrId = match[1];
+      // Match clean problem slug (e.g. /problems/two-sum/ or /problems/two-sum?envType=...)
+      const match = link.match(/problems\/([a-zA-Z0-9\-]+)/);
+      if (match) {
+        problemSlugOrId = match[1].toLowerCase();
+      }
     }
   } catch (e) {
     return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });

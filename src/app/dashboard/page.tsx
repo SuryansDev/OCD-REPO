@@ -447,7 +447,7 @@ export default function Dashboard() {
 
   // Filter users based on search
   const availableMentorsToRequest = allUsers
-    .filter(u => !myMentors.find(m => m.id === u.id));
+    .filter(u => !myMentors.find(m => m.id === u.id) && !pendingRequests.find(r => r.mentor_id === u.id));
 
   return (
     <div className="min-h-screen bg-surface-50 relative">
