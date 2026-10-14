@@ -87,6 +87,8 @@ export default function Dashboard() {
   const [leaderboardTab, setLeaderboardTab] = useState<'streak' | 'lc_rating' | 'cf_rating' | 'total_solved' | 'lc_contest' | 'cf_contest'>('streak');
   const [leaderboardYearFilter, setLeaderboardYearFilter] = useState<'all' | '1' | '2' | '3' | '4' | 'Alumni'>('all');
   const [leaderboardPage, setLeaderboardPage] = useState(1);
+  const [selectedLCContest, setSelectedLCContest] = useState<string>('latest');
+  const [selectedCFContest, setSelectedCFContest] = useState<string>('latest');
 
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -441,6 +443,100 @@ export default function Dashboard() {
     setLeaderboardPage(1);
   };
 
+  // Available LeetCode contests in student data, sorted by latest contest date descending
+  const availableLCContests = useMemo(() => {
+    const contestMap = new Map<string, { name: string; date: string; count: number }>();
+    leaderboardData.forEach((s) => {
+      if (s.lc_latest_contest_name && s.lc_latest_contest_date) {
+        const existing = contestMap.get(s.lc_latest_contest_name);
+        if (existing) {
+          existing.count++;
+        } else {
+          contestMap.set(s.lc_latest_contest_name, {
+            name: s.lc_latest_contest_name,
+            date: s.lc_latest_contest_date,
+            count: 1,
+          });
+        }
+      }
+    });
+    return Array.from(contestMap.values()).sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [leaderboardData]);
+
+  // Available Codeforces contests in student data, sorted by latest contest date descending
+  const availableCFContests = useMemo(() => {
+    const contestMap = new Map<string, { name: string; date: string; count: number }>();
+    leaderboardData.forEach((s) => {
+      if (s.cf_latest_contest_name && s.cf_latest_contest_date) {
+        const existing = contestMap.get(s.cf_latest_contest_name);
+        if (existing) {
+          existing.count++;
+        } else {
+          contestMap.set(s.cf_latest_contest_name, {
+            name: s.cf_latest_contest_name,
+            date: s.cf_latest_contest_date,
+            count: 1,
+          });
+        }
+      }
+    });
+    return Array.from(contestMap.values()).sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [leaderboardData]);
+
+  // Most recent LeetCode contest whose data was available
+  const mostRecentAvailableLCContest = useMemo(() => {
+    if (latestContests.lc?.title && availableLCContests.some((c) => c.name === latestContests.lc?.title)) {
+      return latestContests.lc.title;
+    }
+    return availableLCContests[0]?.name || latestContests.lc?.title || 'Latest Contest';
+  }, [latestContests.lc, availableLCContests]);
+
+  const activeLCContest = selectedLCContest === 'latest' ? mostRecentAvailableLCContest : selectedLCContest;
+
+  // Most recent Codeforces contest whose data was available
+  const mostRecentAvailableCFContest = useMemo(() => {
+    const globalNames = latestContests.cf?.relatedNames?.length
+      ? latestContests.cf.relatedNames
+      : (latestContests.cf?.name ? [latestContests.cf.name] : []);
+
+    if (globalNames.length > 0 && availableCFContests.some((c) => globalNames.includes(c.name))) {
+      return latestContests.cf?.name || globalNames[0];
+    }
+    return availableCFContests[0]?.name || latestContests.cf?.name || 'Latest Contest';
+  }, [latestContests.cf, availableCFContests]);
+
+  const activeCFContest = selectedCFContest === 'latest' ? mostRecentAvailableCFContest : selectedCFContest;
+
+  // Codeforces matching contest names (handles sister divisions)
+  const targetCFNames = useMemo(() => {
+    if (activeCFContest === 'all') return [];
+
+    const globalNames = latestContests.cf?.relatedNames?.length
+      ? latestContests.cf.relatedNames
+      : (latestContests.cf?.name ? [latestContests.cf.name] : []);
+    if (globalNames.includes(activeCFContest)) {
+      return globalNames;
+    }
+
+    const contestEntry = availableCFContests.find((c) => c.name === activeCFContest);
+    if (!contestEntry) return [activeCFContest];
+
+    const targetTime = new Date(contestEntry.date).getTime();
+    const sisterContests = new Set<string>();
+    availableCFContests.forEach((c) => {
+      const time = new Date(c.date).getTime();
+      if (Math.abs(time - targetTime) <= 3600 * 2 * 1000) {
+        sisterContests.add(c.name);
+      }
+    });
+
+    return sisterContests.size > 0 ? Array.from(sisterContests) : [activeCFContest];
+  }, [activeCFContest, latestContests.cf, availableCFContests]);
+
   // Sorted leaderboard entries based on active tab and academic year
   const sortedLeaderboard = useMemo(() => {
     let sorted = [...leaderboardData];
@@ -449,22 +545,6 @@ export default function Dashboard() {
     if (leaderboardYearFilter !== 'all') {
       sorted = sorted.filter((s) => s.user?.year === leaderboardYearFilter);
     }
-
-    const targetLCName = latestContests.lc?.title || (
-      leaderboardData
-        .filter((s) => s.lc_latest_contest_date)
-        .sort((a, b) => new Date(b.lc_latest_contest_date).getTime() - new Date(a.lc_latest_contest_date).getTime())[0]?.lc_latest_contest_name
-    ) || '';
-
-    const targetCFName = latestContests.cf?.name || (
-      leaderboardData
-        .filter((s) => s.cf_latest_contest_date)
-        .sort((a, b) => new Date(b.cf_latest_contest_date).getTime() - new Date(a.cf_latest_contest_date).getTime())[0]?.cf_latest_contest_name
-    ) || '';
-
-    const targetCFNames = latestContests.cf?.relatedNames?.length
-      ? latestContests.cf.relatedNames
-      : (targetCFName ? [targetCFName] : []);
 
     if (leaderboardTab === 'streak') {
       sorted.sort((a, b) => (b.current_streak || 0) - (a.current_streak || 0));
@@ -475,15 +555,33 @@ export default function Dashboard() {
     } else if (leaderboardTab === 'total_solved') {
       sorted.sort((a, b) => ((b.lc_total_solved || 0) + (b.cf_total_solved || 0)) - ((a.lc_total_solved || 0) + (a.cf_total_solved || 0)));
     } else if (leaderboardTab === 'lc_contest') {
-      sorted = targetLCName ? sorted.filter((s) => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName) : [];
-      sorted.sort((a, b) => (a.lc_latest_contest_rank || 999999) - (b.lc_latest_contest_rank || 999999));
+      if (activeLCContest === 'all') {
+        sorted = sorted.filter((s) => s.lc_latest_contest_name);
+        sorted.sort((a, b) => (a.lc_latest_contest_rank || 999999) - (b.lc_latest_contest_rank || 999999));
+      } else {
+        sorted = activeLCContest ? sorted.filter((s) => s.lc_latest_contest_name && s.lc_latest_contest_name === activeLCContest) : [];
+        sorted.sort((a, b) => (a.lc_latest_contest_rank || 999999) - (b.lc_latest_contest_rank || 999999));
+      }
     } else if (leaderboardTab === 'cf_contest') {
-      sorted = targetCFNames.length > 0 ? sorted.filter((s) => s.cf_latest_contest_name && targetCFNames.includes(s.cf_latest_contest_name)) : [];
-      sorted.sort((a, b) => (a.cf_latest_contest_rank || 999999) - (b.cf_latest_contest_rank || 999999));
+      if (activeCFContest === 'all') {
+        sorted = sorted.filter((s) => s.cf_latest_contest_name);
+        sorted.sort((a, b) => (a.cf_latest_contest_rank || 999999) - (b.cf_latest_contest_rank || 999999));
+      } else {
+        const matchingNames = targetCFNames.length > 0 ? targetCFNames : [activeCFContest];
+        sorted = matchingNames.length > 0 ? sorted.filter((s) => s.cf_latest_contest_name && matchingNames.includes(s.cf_latest_contest_name)) : [];
+        sorted.sort((a, b) => (a.cf_latest_contest_rank || 999999) - (b.cf_latest_contest_rank || 999999));
+      }
     }
 
     return sorted;
-  }, [leaderboardData, leaderboardTab, latestContests, leaderboardYearFilter]);
+  }, [
+    leaderboardData,
+    leaderboardTab,
+    leaderboardYearFilter,
+    activeLCContest,
+    activeCFContest,
+    targetCFNames,
+  ]);
 
   const LEADERBOARD_PER_PAGE = 5;
   const totalLeaderboardPages = Math.max(1, Math.ceil(sortedLeaderboard.length / LEADERBOARD_PER_PAGE));
@@ -497,29 +595,29 @@ export default function Dashboard() {
   const myEntry = myRankIndex !== -1 ? sortedLeaderboard[myRankIndex] : null;
   const myRank = myRankIndex !== -1 ? myRankIndex + 1 : null;
 
-  const targetLCName = latestContests.lc?.title || (
-    leaderboardData
-      .filter((s) => s.lc_latest_contest_date)
-      .sort((a, b) => new Date(b.lc_latest_contest_date).getTime() - new Date(a.lc_latest_contest_date).getTime())[0]?.lc_latest_contest_name
-  ) || 'Latest Contest';
+  const targetLCName = activeLCContest;
+  const targetCFName = activeCFContest;
 
-  const targetCFName = latestContests.cf?.name || (
-    leaderboardData
-      .filter((s) => s.cf_latest_contest_date)
-      .sort((a, b) => new Date(b.cf_latest_contest_date).getTime() - new Date(a.cf_latest_contest_date).getTime())[0]?.cf_latest_contest_name
-  ) || 'Latest Contest';
+  const lcParticipantsCount = useMemo(() => {
+    return leaderboardData
+      .filter((s) => leaderboardYearFilter === 'all' || s.user?.year === leaderboardYearFilter)
+      .filter((s) => {
+        if (!s.lc_latest_contest_name) return false;
+        if (activeLCContest === 'all') return true;
+        return s.lc_latest_contest_name === activeLCContest;
+      }).length;
+  }, [leaderboardData, leaderboardYearFilter, activeLCContest]);
 
-  const targetCFNames = latestContests.cf?.relatedNames?.length
-    ? latestContests.cf.relatedNames
-    : (targetCFName ? [targetCFName] : []);
-
-  const lcParticipantsCount = leaderboardData
-    .filter((s) => leaderboardYearFilter === 'all' || s.user?.year === leaderboardYearFilter)
-    .filter((s) => s.lc_latest_contest_name && s.lc_latest_contest_name === targetLCName).length;
-
-  const cfParticipantsCount = leaderboardData
-    .filter((s) => leaderboardYearFilter === 'all' || s.user?.year === leaderboardYearFilter)
-    .filter((s) => s.cf_latest_contest_name && (targetCFNames.length > 0 ? targetCFNames.includes(s.cf_latest_contest_name) : s.cf_latest_contest_name === targetCFName)).length;
+  const cfParticipantsCount = useMemo(() => {
+    const matchingNames = targetCFNames.length > 0 ? targetCFNames : [activeCFContest];
+    return leaderboardData
+      .filter((s) => leaderboardYearFilter === 'all' || s.user?.year === leaderboardYearFilter)
+      .filter((s) => {
+        if (!s.cf_latest_contest_name) return false;
+        if (activeCFContest === 'all') return true;
+        return matchingNames.includes(s.cf_latest_contest_name);
+      }).length;
+  }, [leaderboardData, leaderboardYearFilter, activeCFContest, targetCFNames]);
 
   if (loading) {
     return (
@@ -1005,14 +1103,42 @@ export default function Dashboard() {
 
               {/* Contest Info Banner (when on LC Contest or CF Contest tabs) */}
               {leaderboardTab === 'lc_contest' && (
-                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-xl p-3 mb-3 flex items-center justify-between gap-2 shadow-sm text-xs">
-                  <div className="min-w-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded">
-                      LeetCode Contest
-                    </span>
-                    <h4 className="font-bold text-surface-900 truncate mt-1">{targetLCName}</h4>
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm text-xs">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded">
+                        LeetCode Contest
+                      </span>
+                      <span className="text-[10px] font-semibold text-amber-700 bg-amber-200/60 px-1.5 py-0.5 rounded">
+                        {selectedLCContest === 'latest' ? 'Most Recent Available' : selectedLCContest === 'all' ? 'All Recent' : 'Selected Contest'}
+                      </span>
+                    </div>
+                    {availableLCContests.length > 1 ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <select
+                          value={selectedLCContest}
+                          onChange={(e) => {
+                            setSelectedLCContest(e.target.value);
+                            setLeaderboardPage(1);
+                          }}
+                          className="font-bold text-surface-900 bg-white border border-amber-300 rounded-lg px-2.5 py-1 text-xs focus:ring-2 focus:ring-amber-400 outline-none cursor-pointer max-w-full sm:max-w-md shadow-xs"
+                        >
+                          <option value="latest">⚡ Most Recent: {mostRecentAvailableLCContest}</option>
+                          <option value="all">🌐 All Recent (Every Member&apos;s Latest)</option>
+                          <optgroup label="Available Contests with Data">
+                            {availableLCContests.map((c) => (
+                              <option key={c.name} value={c.name}>
+                                {c.name} ({c.count} {c.count === 1 ? 'member' : 'members'})
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+                      </div>
+                    ) : (
+                      <h4 className="font-bold text-surface-900 truncate mt-1">{activeLCContest}</h4>
+                    )}
                   </div>
-                  <div className="bg-white/90 border border-amber-200/60 rounded-lg px-2.5 py-1 text-right shrink-0">
+                  <div className="bg-white/90 border border-amber-200/60 rounded-lg px-2.5 py-1 text-right shrink-0 self-start sm:self-center">
                     <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
                     <div className="text-sm font-black text-amber-600">{lcParticipantsCount} members</div>
                   </div>
@@ -1020,14 +1146,42 @@ export default function Dashboard() {
               )}
 
               {leaderboardTab === 'cf_contest' && (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl p-3 mb-3 flex items-center justify-between gap-2 shadow-sm text-xs">
-                  <div className="min-w-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded">
-                      Codeforces Contest
-                    </span>
-                    <h4 className="font-bold text-surface-900 truncate mt-1">{targetCFName}</h4>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm text-xs">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded">
+                        Codeforces Contest
+                      </span>
+                      <span className="text-[10px] font-semibold text-blue-700 bg-blue-200/60 px-1.5 py-0.5 rounded">
+                        {selectedCFContest === 'latest' ? 'Most Recent Available' : selectedCFContest === 'all' ? 'All Recent' : 'Selected Contest'}
+                      </span>
+                    </div>
+                    {availableCFContests.length > 1 ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <select
+                          value={selectedCFContest}
+                          onChange={(e) => {
+                            setSelectedCFContest(e.target.value);
+                            setLeaderboardPage(1);
+                          }}
+                          className="font-bold text-surface-900 bg-white border border-blue-300 rounded-lg px-2.5 py-1 text-xs focus:ring-2 focus:ring-blue-400 outline-none cursor-pointer max-w-full sm:max-w-md shadow-xs truncate"
+                        >
+                          <option value="latest">⚡ Most Recent: {mostRecentAvailableCFContest}</option>
+                          <option value="all">🌐 All Recent (Every Member&apos;s Latest)</option>
+                          <optgroup label="Available Contests with Data">
+                            {availableCFContests.map((c) => (
+                              <option key={c.name} value={c.name}>
+                                {c.name} ({c.count} {c.count === 1 ? 'member' : 'members'})
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+                      </div>
+                    ) : (
+                      <h4 className="font-bold text-surface-900 truncate mt-1">{activeCFContest}</h4>
+                    )}
                   </div>
-                  <div className="bg-white/90 border border-blue-200/60 rounded-lg px-2.5 py-1 text-right shrink-0">
+                  <div className="bg-white/90 border border-blue-200/60 rounded-lg px-2.5 py-1 text-right shrink-0 self-start sm:self-center">
                     <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
                     <div className="text-sm font-black text-blue-600">{cfParticipantsCount} members</div>
                   </div>
