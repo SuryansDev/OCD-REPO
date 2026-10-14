@@ -12,7 +12,7 @@ import {
   Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2,
   Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink,
   Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight, Check,
-  Youtube, CheckSquare, Square
+  Video, CheckSquare, Square
 } from 'lucide-react';
 import {
   cleanCodeforcesHandle,
@@ -939,7 +939,7 @@ export default function Dashboard() {
                               </span>
                             ) : task.platform === 'YouTube' ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200/80">
-                                <Youtube className="w-3 h-3 text-red-600" /> YT
+                                <Video className="w-3 h-3 text-red-600" /> YT
                               </span>
                             ) : (
                               <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80">
