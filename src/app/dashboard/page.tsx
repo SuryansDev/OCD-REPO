@@ -11,7 +11,8 @@ import type { UserProfile, Task } from '@/lib/types';
 import {
   Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2,
   Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink,
-  Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight, Check
+  Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight, Check,
+  Youtube, CheckSquare, Square
 } from 'lucide-react';
 import {
   cleanCodeforcesHandle,
@@ -32,6 +33,8 @@ const getTaskLink = (task: any) => {
       return `https://codeforces.com/problemset/problem/${parts[0]}/${parts[1]}`;
     }
     return `https://codeforces.com/problemset/problem/${task.problem_slug_or_id}`;
+  } else if (task.platform === 'YouTube') {
+    return `https://www.youtube.com/watch?v=${task.problem_slug_or_id}`;
   }
   return '#';
 };
@@ -42,6 +45,8 @@ const formatProblemTitle = (slugOrId: string, platform: string) => {
       .split('-')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(' ');
+  } else if (platform === 'YouTube') {
+    return `Video: ${slugOrId}`;
   }
   return slugOrId;
 };
@@ -75,6 +80,7 @@ export default function Dashboard() {
 
   // Modals state
   const [selectedTaskGroup, setSelectedTaskGroup] = useState<any | null>(null);
+  const [togglingTaskId, setTogglingTaskId] = useState<number | null>(null);
   const [selectedMentee, setSelectedMentee] = useState<UserProfile | null>(null);
   const [showPromotion, setShowPromotion] = useState(false);
 
@@ -223,6 +229,42 @@ export default function Dashboard() {
     return stats;
   }, [myMentees, menteeAllTasks]);
 
+
+  const handleToggleSelfCheck = async (task: Task) => {
+    if (togglingTaskId !== null) return;
+    const newStatus = task.status === 'Completed' ? 'Pending' : 'Completed';
+    const completedAt = newStatus === 'Completed' ? new Date().toISOString() : null;
+
+    setTogglingTaskId(task.id);
+
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          status: newStatus,
+          completed_at: completedAt,
+        })
+        .eq('id', task.id);
+
+      if (error) {
+        alert(`Failed to update task: ${error.message}`);
+      } else {
+        setMyTasks((prev) =>
+          prev.map((t) =>
+            t.id === task.id ? { ...t, status: newStatus, completed_at: completedAt } : t
+          )
+        );
+        if (newStatus === 'Completed') {
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 4000);
+        }
+      }
+    } catch (e: any) {
+      alert(`Error updating task: ${e?.message || 'Something went wrong'}`);
+    } finally {
+      setTogglingTaskId(null);
+    }
+  };
 
   const handleSyncProgress = async () => {
     setSyncing(true);
@@ -845,22 +887,37 @@ export default function Dashboard() {
                         <td colSpan={5} className="px-4 py-12 text-center text-surface-400">
                           <Code2 className="w-8 h-8 text-surface-300 mx-auto mb-2" />
                           <p className="font-semibold text-surface-700 text-sm">No assignments assigned yet</p>
-                          <p className="text-xs text-surface-400 mt-1">When your mentor assigns questions, they will appear here.</p>
+                          <p className="text-xs text-surface-400 mt-1">When your mentor assigns questions or videos, they will appear here.</p>
                         </td>
                       </tr>
                     ) : (
                       paginatedTasks.map((task) => (
                         <tr key={task.id} className="hover:bg-surface-50/80 transition-colors group">
-                          {/* Solved / Unsolved Icon */}
+                          {/* Solved / Unsolved Icon / Checkbox */}
                           <td className="py-3 px-3 text-center">
-                            {task.status === 'Completed' ? (
+                            {task.platform === 'YouTube' ? (
+                              <button
+                                onClick={() => handleToggleSelfCheck(task)}
+                                disabled={togglingTaskId === task.id}
+                                className="p-1 rounded-md hover:bg-surface-100 transition-colors inline-flex items-center justify-center focus:outline-none"
+                                title={task.status === 'Completed' ? 'Click to uncheck' : 'Click to self-check'}
+                              >
+                                {togglingTaskId === task.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin text-brand-600" />
+                                ) : task.status === 'Completed' ? (
+                                  <CheckSquare className="w-4 h-4 text-emerald-600" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-surface-400 hover:text-emerald-500" />
+                                )}
+                              </button>
+                            ) : task.status === 'Completed' ? (
                               <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
                             ) : (
                               <CircleDashed className="w-4 h-4 text-surface-300 mx-auto group-hover:text-amber-500 transition-colors" />
                             )}
                           </td>
 
-                          {/* Problem Title Link */}
+                          {/* Problem / Video Title Link */}
                           <td className="py-3 px-4">
                             <a
                               href={getTaskLink(task)}
@@ -880,6 +937,10 @@ export default function Dashboard() {
                               <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
                                 LC
                               </span>
+                            ) : task.platform === 'YouTube' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200/80">
+                                <Youtube className="w-3 h-3 text-red-600" /> YT
+                              </span>
                             ) : (
                               <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80">
                                 CF
@@ -892,9 +953,29 @@ export default function Dashboard() {
                             {new Date(task.assigned_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                           </td>
 
-                          {/* State Pill */}
+                          {/* State Pill / Self-Check Action */}
                           <td className="py-3 px-4 text-right whitespace-nowrap">
-                            {task.status === 'Completed' ? (
+                            {task.platform === 'YouTube' ? (
+                              <button
+                                onClick={() => handleToggleSelfCheck(task)}
+                                disabled={togglingTaskId === task.id}
+                                className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border transition-all ${
+                                  task.status === 'Completed'
+                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+                                    : 'text-brand-700 bg-brand-50 border-brand-200 hover:bg-brand-100 shadow-sm'
+                                }`}
+                                title={task.status === 'Completed' ? 'Click to mark as pending' : 'Click to self-check as completed'}
+                              >
+                                {togglingTaskId === task.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : task.status === 'Completed' ? (
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                ) : (
+                                  <CheckSquare className="w-3 h-3 text-brand-600" />
+                                )}
+                                {task.status === 'Completed' ? 'Completed' : 'Self Check'}
+                              </button>
+                            ) : task.status === 'Completed' ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                                 <CheckCircle className="w-3 h-3" /> Solved
                               </span>
@@ -1698,16 +1779,16 @@ export default function Dashboard() {
             {/* Assign Tasks */}
             <div className="card p-6 border-brand-200 border-2 bg-brand-50/30 flex flex-col">
               <h3 className="text-lg font-bold text-surface-900 mb-1">Assign Task to Cohort</h3>
-              <p className="text-sm text-surface-500 mb-6">Paste a Codeforces or LeetCode problem URL. It will be assigned to all your approved mentees.</p>
+              <p className="text-sm text-surface-500 mb-6">Paste a Codeforces, LeetCode, or YouTube video URL. It will be assigned to all your approved mentees.</p>
 
               <form onSubmit={handleAssignTask} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Problem Link</label>
+                  <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Problem or Video Link</label>
                   <div className="relative">
                     <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
                     <input
                       type="url"
-                      placeholder="https://leetcode.com/problems/..."
+                      placeholder="https://leetcode.com/problems/... or https://youtu.be/..."
                       value={taskLink}
                       onChange={(e) => setTaskLink(e.target.value)}
                       className="input-field pl-10 bg-white"

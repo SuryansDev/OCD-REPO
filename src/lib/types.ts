@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'user';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
-export type Platform = 'Codeforces' | 'LeetCode';
+export type Platform = 'Codeforces' | 'LeetCode' | 'YouTube';
 export type TaskStatus = 'Pending' | 'Completed';
 
 export interface UserProfile {

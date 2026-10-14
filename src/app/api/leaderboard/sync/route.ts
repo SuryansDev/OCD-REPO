@@ -31,74 +31,106 @@ interface CFInfoResult {
 }
 
 // ─── Codeforces: fetch user info (rating) ───────────────────
-async function fetchCFInfo(handle: string): Promise<CFInfoResult> {
+async function fetchCFInfo(handle: string, retries = 2): Promise<CFInfoResult> {
   const h = cleanCodeforcesHandle(handle);
   if (!h) {
     return { ok: false, status: 'missing', errorMsg: 'No Codeforces handle configured' };
   }
-  try {
-    const res = await fetch(`https://codeforces.com/api/user.info?handles=${encodeURIComponent(h)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      next: { revalidate: 0 },
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || data?.status !== 'OK' || !data?.result?.length) {
-      const comment = data?.comment || 'Codeforces handle not found or private';
-      const isNotFound = comment.toLowerCase().includes('not found');
-      return {
-        ok: false,
-        status: isNotFound ? 'private_or_not_found' : 'error',
-        errorMsg: comment,
-      };
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 600 * attempt));
+      }
+      const res = await fetch(`https://codeforces.com/api/user.info?handles=${encodeURIComponent(h)}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        next: { revalidate: 0 },
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.comment && data.comment.toLowerCase().includes('limit')) {
+        continue;
+      }
+      if (!res.ok || data?.status !== 'OK' || !data?.result?.length) {
+        const comment = data?.comment || 'Codeforces handle not found or private';
+        const isNotFound = comment.toLowerCase().includes('not found');
+        return {
+          ok: false,
+          status: isNotFound ? 'private_or_not_found' : 'error',
+          errorMsg: comment,
+        };
+      }
+      return { ok: true, status: 'ok', info: data.result[0] };
+    } catch (err: any) {
+      if (attempt === retries) {
+        return { ok: false, status: 'error', errorMsg: err?.message || 'Network error querying Codeforces API' };
+      }
     }
-    return { ok: true, status: 'ok', info: data.result[0] };
-  } catch (err: any) {
-    return { ok: false, status: 'error', errorMsg: err?.message || 'Network error querying Codeforces API' };
   }
+  return { ok: false, status: 'error', errorMsg: 'Codeforces rate limit exceeded' };
 }
 
 // ─── Codeforces: fetch latest contest ───────────────────────
-async function fetchCFRating(handle: string) {
+async function fetchCFRating(handle: string, retries = 2) {
   const h = cleanCodeforcesHandle(handle);
   if (!h) return null;
-  try {
-    const res = await fetch(`https://codeforces.com/api/user.rating?handle=${encodeURIComponent(h)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return null;
-    const data = await res.json().catch(() => null);
-    if (data?.status !== 'OK' || !data?.result?.length) return null;
-    return data.result[data.result.length - 1];
-  } catch { return null; }
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 600 * attempt));
+      }
+      const res = await fetch(`https://codeforces.com/api/user.rating?handle=${encodeURIComponent(h)}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        next: { revalidate: 0 },
+      });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      if (data?.comment && data.comment.toLowerCase().includes('limit')) continue;
+      if (data?.status !== 'OK' || !data?.result?.length) return null;
+      return data.result[data.result.length - 1];
+    } catch { }
+  }
+  return null;
 }
 
 // ─── Codeforces: count unique solved problems ───────────────
-async function fetchCFSolved(handle: string): Promise<number> {
+async function fetchCFSolved(handle: string, retries = 2): Promise<number> {
   const h = cleanCodeforcesHandle(handle);
   if (!h) return 0;
-  try {
-    const res = await fetch(`https://codeforces.com/api/user.status?handle=${encodeURIComponent(h)}&from=1&count=10000`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return 0;
-    const data = await res.json().catch(() => null);
-    if (data?.status !== 'OK' || !Array.isArray(data?.result)) return 0;
-    const solved = new Set<string>();
-    data.result.forEach((sub: any) => {
-      if (sub.verdict === 'OK' && sub.problem?.contestId && sub.problem?.index) {
-        solved.add(`${sub.problem.contestId}-${sub.problem.index}`);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 600 * attempt));
       }
-    });
-    return solved.size;
-  } catch { return 0; }
+      const res = await fetch(`https://codeforces.com/api/user.status?handle=${encodeURIComponent(h)}&from=1&count=10000`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        next: { revalidate: 0 },
+      });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      if (data?.status !== 'OK' || !Array.isArray(data?.result)) {
+        if (data?.comment && data.comment.toLowerCase().includes('limit')) continue;
+        return 0;
+      }
+      const solved = new Set<string>();
+      data.result.forEach((sub: any) => {
+        if (sub.verdict === 'OK') {
+          const key = (sub.problem?.contestId && sub.problem?.index)
+            ? `${sub.problem.contestId}-${sub.problem.index}`
+            : (sub.problem?.name || (sub.problem?.problemsetName && sub.problem?.index ? `${sub.problem.problemsetName}-${sub.problem.index}` : null));
+          if (key) solved.add(key);
+        }
+      });
+      return solved.size;
+    } catch {
+      // retry on network error
+    }
+  }
+  return 0;
 }
 
 interface LCProfileResult {
@@ -272,8 +304,8 @@ export async function POST(request: NextRequest) {
     cf_error_msg?: string | null;
   }> = [];
 
-  // Process users in concurrent batches of 4 to avoid timeouts while respecting API rate limits
-  const BATCH_SIZE = 4;
+  // Process users in concurrent batches of 2 with spacing to strictly respect Codeforces 5 req/sec limit
+  const BATCH_SIZE = 2;
   for (let i = 0; i < users.length; i += BATCH_SIZE) {
     const batch = users.slice(i, i + BATCH_SIZE);
 
@@ -314,10 +346,14 @@ export async function POST(request: NextRequest) {
             cfStatus = cfInfoResult.status;
             cfErrorMsg = cfInfoResult.errorMsg || null;
 
+            // Always assign cf_total_solved if cfSolved > 0 (do not depend on cfInfoResult.ok)
+            if (cfSolved > 0) {
+              statsPayload.cf_total_solved = cfSolved;
+            }
+
             if (cfInfoResult.ok && cfInfoResult.info) {
               statsPayload.cf_rating = cfInfoResult.info.rating || 0;
               statsPayload.cf_max_rating = cfInfoResult.info.maxRating || 0;
-              statsPayload.cf_total_solved = cfSolved;
 
               if (cfLatest) {
                 statsPayload.cf_latest_contest_name = cfLatest.contestName;
@@ -419,6 +455,18 @@ export async function POST(request: NextRequest) {
             statsPayload.max_streak = Math.max(streak, existing?.max_streak || 0);
           }
 
+          // Preserve existing cf_total_solved if API failed or returned 0 temporarily
+          if (!statsPayload.cf_total_solved || statsPayload.cf_total_solved === 0) {
+            const { data: existing } = await supabase
+              .from('user_stats')
+              .select('cf_total_solved')
+              .eq('user_id', u.id)
+              .single();
+            if (existing?.cf_total_solved) {
+              statsPayload.cf_total_solved = existing.cf_total_solved;
+            }
+          }
+
           // Upsert into user_stats strictly with schema-compatible columns
           const { error: upsertError } = await supabase
             .from('user_stats')
@@ -435,9 +483,9 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Brief breather between batches to respect rate limits
+    // Breather between batches to strictly stay within Codeforces API rate limits
     if (i + BATCH_SIZE < users.length) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 350));
     }
   }
 

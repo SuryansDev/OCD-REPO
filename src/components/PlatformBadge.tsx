@@ -18,12 +18,16 @@ export default function PlatformBadge({ platform, size = 'md', className }: Plat
     <div
       className={cn(
         'flex items-center justify-center rounded-xl font-bold text-white shadow-lg',
-        platform === 'Codeforces' ? 'platform-cf shadow-blue-500/25' : 'platform-lc shadow-amber-400/25',
+        platform === 'Codeforces'
+          ? 'platform-cf shadow-blue-500/25'
+          : platform === 'YouTube'
+          ? 'bg-red-600 shadow-red-500/25'
+          : 'platform-lc shadow-amber-400/25',
         sizeClasses[size],
         className
       )}
     >
-      {platform === 'Codeforces' ? 'CF' : 'LC'}
+      {platform === 'Codeforces' ? 'CF' : platform === 'YouTube' ? 'YT' : 'LC'}
     </div>
   );
 }

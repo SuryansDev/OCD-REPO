@@ -66,6 +66,30 @@ export async function POST(request: NextRequest) {
       if (match) {
         problemSlugOrId = match[1].toLowerCase();
       }
+    } else if (url.hostname.includes('youtube.com') || url.hostname.includes('youtu.be')) {
+      platform = 'YouTube';
+      // Match youtu.be/ID
+      if (url.hostname.includes('youtu.be')) {
+        const id = url.pathname.replace(/^\/+/, '').split(/[\/\?#]/)[0];
+        if (id) problemSlugOrId = id;
+      } else if (url.pathname.includes('/shorts/')) {
+        const id = url.pathname.split('/shorts/')[1]?.split(/[\/\?#]/)[0];
+        if (id) problemSlugOrId = id;
+      } else if (url.pathname.includes('/embed/')) {
+        const id = url.pathname.split('/embed/')[1]?.split(/[\/\?#]/)[0];
+        if (id) problemSlugOrId = id;
+      } else if (url.pathname.includes('/live/')) {
+        const id = url.pathname.split('/live/')[1]?.split(/[\/\?#]/)[0];
+        if (id) problemSlugOrId = id;
+      } else {
+        const id = url.searchParams.get('v');
+        if (id) {
+          problemSlugOrId = id;
+        } else {
+          const parts = url.pathname.replace(/^\/+/, '').split(/[\/\?#]/);
+          if (parts.length > 0 && parts[0]) problemSlugOrId = parts[0];
+        }
+      }
     }
   } catch (e) {
     return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
@@ -73,7 +97,7 @@ export async function POST(request: NextRequest) {
 
   if (!platform || !problemSlugOrId) {
     return NextResponse.json(
-      { error: 'Could not parse problem from the provided link. Ensure it is a valid Codeforces or LeetCode problem URL.' },
+      { error: 'Could not parse link. Ensure it is a valid Codeforces, LeetCode, or YouTube link.' },
       { status: 400 }
     );
   }
