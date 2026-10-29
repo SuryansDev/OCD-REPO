@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'OCD — Open Club Developers',
+  title: 'OCD — Open Code Developers',
   description:
     'Track coding assignments between Mentors and Mentees. Automatically verify Codeforces & LeetCode problem submissions.',
 };
