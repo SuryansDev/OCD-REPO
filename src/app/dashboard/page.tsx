@@ -1729,6 +1729,19 @@ export default function Dashboard() {
                   Requests go directly to the mentor to accept or decline.
                 </p>
 
+                {myMentors.length > 0 && (
+                  <div className="mb-4 rounded-lg border border-purple-100 bg-purple-50/60 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-700 mb-2">Your mentors</p>
+                    <ul className="flex flex-wrap gap-2">
+                      {myMentors.map((mentor) => (
+                        <li key={mentor.id} className="rounded-full bg-white border border-purple-100 px-3 py-1 text-xs font-medium text-surface-800">
+                          {mentor.full_name}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <form onSubmit={handleRequestMentor} className="space-y-3">
                   <div className="flex gap-2">
                     <select
