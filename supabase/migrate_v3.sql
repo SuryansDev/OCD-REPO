@@ -20,8 +20,9 @@ UPDATE public.users SET role = 'user' WHERE role IN ('mentor', 'mentee');
 ALTER TABLE public.mentorship_requests ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admins can view all mentorship requests" ON public.mentorship_requests FOR SELECT USING (public.is_admin());
 CREATE POLICY "Users can view own requests" ON public.mentorship_requests FOR SELECT USING (mentor_id = auth.uid() OR mentee_id = auth.uid());
-CREATE POLICY "Users can create mentorship requests" ON public.mentorship_requests FOR INSERT WITH CHECK (mentor_id = auth.uid());
+CREATE POLICY "Users can create mentorship requests" ON public.mentorship_requests FOR INSERT WITH CHECK (mentee_id = auth.uid() AND status = 'pending');
 CREATE POLICY "Admins can update mentorship requests" ON public.mentorship_requests FOR UPDATE USING (public.is_admin());
+CREATE POLICY "Mentees can resubmit rejected mentorship requests" ON public.mentorship_requests FOR UPDATE USING (mentee_id = auth.uid() AND status = 'rejected') WITH CHECK (mentee_id = auth.uid() AND status = 'pending');
 
 DROP POLICY IF EXISTS "Mentors can view own mentorships" ON public.mentorships;
 DROP POLICY IF EXISTS "Mentees can view own mentorships" ON public.mentorships;
