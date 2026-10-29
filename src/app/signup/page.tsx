@@ -101,7 +101,7 @@ export default function SignupPage() {
           </div>
           <h1 className="text-3xl font-bold gradient-text">Create Account</h1>
           <p className="text-surface-400 text-sm mt-1">
-            Join the Online Coding Dashboard at NIT Kurukshetra
+            Join Open Club Developers at NIT Kurukshetra
           </p>
         </div>
 

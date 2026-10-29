@@ -240,7 +240,7 @@ export default function LoginPage() {
           </div>
           <h1 className="text-3xl font-bold gradient-text">OCD</h1>
           <p className="text-surface-400 text-sm mt-1 font-medium tracking-wide">
-            Online Coding Dashboard — NIT Kurukshetra
+            Open Club Developers — NIT Kurukshetra
           </p>
         </div>
 

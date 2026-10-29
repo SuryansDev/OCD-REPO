@@ -2,7 +2,7 @@
   "name": "ocd-repo",
   "version": "1.0.0",
   "private": true,
-  "description": "Online Coding Dashboard — Mentor-Mentee Assignment Tracker",
+  "description": "Open Club Developers — Mentor-Mentee Assignment Tracker",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
