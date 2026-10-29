@@ -315,20 +315,55 @@ export default function Dashboard() {
   const handleRequestMentor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMentorId) return;
+    if (!profile) {
+      alert('Your profile is still loading. Please try again.');
+      return;
+    }
     setRequesting(true);
 
-    // Upsert mentorship request so if re-requesting after previous rejection it reactivates
-    const { error } = await supabase.from('mentorship_requests').upsert([
-      { mentor_id: selectedMentorId, mentee_id: profile!.id, status: 'pending' }
-    ], { onConflict: 'mentor_id,mentee_id' });
+    try {
+      const { data: existingRequest, error: lookupError } = await supabase
+        .from('mentorship_requests')
+        .select('id, status')
+        .eq('mentor_id', selectedMentorId)
+        .eq('mentee_id', profile.id)
+        .maybeSingle();
 
-    if (error) {
-      alert(`Failed to send request: ${error.message}`);
-    } else {
-      setSelectedMentorId('');
-      fetchData();
+      if (lookupError) {
+        alert(`Failed to check existing request: ${lookupError.message}`);
+        return;
+      }
+
+      if (existingRequest?.status === 'pending') {
+        alert('You already have a pending request with this mentor.');
+        return;
+      }
+
+      if (existingRequest?.status === 'approved') {
+        alert('This mentor has already accepted your request.');
+        return;
+      }
+
+      const result = existingRequest?.status === 'rejected'
+        ? await supabase
+            .from('mentorship_requests')
+            .update({ status: 'pending' })
+            .eq('id', existingRequest.id)
+        : await supabase
+            .from('mentorship_requests')
+            .insert({ mentor_id: selectedMentorId, mentee_id: profile.id, status: 'pending' });
+
+      if (result.error) {
+        alert(`Failed to send request: ${result.error.message}`);
+      } else {
+        setSelectedMentorId('');
+        await fetchData();
+      }
+    } catch (error: any) {
+      alert(`Failed to send request: ${error?.message || 'Please try again.'}`);
+    } finally {
+      setRequesting(false);
     }
-    setRequesting(false);
   };
 
   const handleAcceptMenteeRequest = async (requestId: number, menteeId: string, menteeName: string) => {
