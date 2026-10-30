@@ -426,13 +426,18 @@ Please update your profile settings so your contest ratings and tasks can sync p
             {/* Sync Leaderboard */}
             <div className="card overflow-hidden p-6 border-emerald-200 border-2 bg-emerald-50/30 flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-bold text-surface-900">Sync Leaderboard Rankings</h3>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-lg font-bold text-surface-900">Sync Leaderboard &amp; Cohort Tasks</h3>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" /> Auto-Sync: 00:00 AM IST
+                  </span>
+                </div>
                 <p className="text-xs text-surface-600 mt-1 leading-relaxed">
-                  Pulls the latest LeetCode &amp; Codeforces stats, contest history, solved counts, streaks, and platform privacy status for all approved students.
+                  Automatically runs daily at <strong>00:00 AM IST</strong> to roll out mentors&apos; scheduled questions and sync LeetCode &amp; Codeforces ratings, streaks, solved counts, and privacy status for all students.
                 </p>
               </div>
               <div className="mt-4 pt-4 border-t border-emerald-100 flex items-center justify-between">
-                <span className="text-xs text-emerald-800 font-medium">Runs diagnostics automatically</span>
+                <span className="text-xs text-emerald-800 font-medium">Manual on-demand sync</span>
                 <button 
                   onClick={async () => {
                     if (!confirm('This will fetch stats from LeetCode & Codeforces for all users. It may take a minute.')) return;

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
+import { parseTaskLink } from '@/lib/taskParser';
+import { getTodayIST, getDateOffsetIST } from '@/lib/dateUtils';
 
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;
@@ -24,7 +26,7 @@ function createRouteHandlerClient(request: NextRequest) {
   );
 }
 
-// POST /api/tasks — bulk create tasks for all mentees
+// POST /api/tasks — bulk create tasks for all mentees (or schedule if scheduled_date is provided)
 export async function POST(request: NextRequest) {
   const supabase = createRouteHandlerClient(request);
 
@@ -34,68 +36,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { link } = body;
+  const body = await request.json().catch(() => ({}));
+  const { link, scheduled_date } = body;
 
   if (!link) {
     return NextResponse.json({ error: 'link is required' }, { status: 400 });
   }
 
-  let platform = '';
-  let problemSlugOrId = '';
-
-  try {
-    const url = new URL(link.trim());
-    if (url.hostname.includes('codeforces.com')) {
-      platform = 'Codeforces';
-      // Match contest / gym: /contest/1800/problem/A or /gym/104000/problem/B
-      const contestMatch = link.match(/(?:contest|gym)\/(\d+)\/problem\/([A-Za-z0-9]+)/i);
-      // Match problemset: /problemset/problem/1800/A
-      const problemsetMatch = link.match(/problemset\/problem\/(\d+)\/([A-Za-z0-9]+)/i);
-      // Fallback: /problem/1800/A
-      const fallbackMatch = link.match(/problem\/(\d+)\/([A-Za-z0-9]+)/i);
-
-      const match = contestMatch || problemsetMatch || fallbackMatch;
-      if (match) {
-        problemSlugOrId = `${match[1]}${match[2].toUpperCase()}`;
-      }
-    } else if (url.hostname.includes('leetcode.com')) {
-      platform = 'LeetCode';
-      // Match clean problem slug (e.g. /problems/two-sum/ or /problems/two-sum?envType=...)
-      const match = link.match(/problems\/([a-zA-Z0-9\-]+)/);
-      if (match) {
-        problemSlugOrId = match[1].toLowerCase();
-      }
-    } else if (url.hostname.includes('youtube.com') || url.hostname.includes('youtu.be')) {
-      platform = 'YouTube';
-      // Match youtu.be/ID
-      if (url.hostname.includes('youtu.be')) {
-        const id = url.pathname.replace(/^\/+/, '').split(/[\/\?#]/)[0];
-        if (id) problemSlugOrId = id;
-      } else if (url.pathname.includes('/shorts/')) {
-        const id = url.pathname.split('/shorts/')[1]?.split(/[\/\?#]/)[0];
-        if (id) problemSlugOrId = id;
-      } else if (url.pathname.includes('/embed/')) {
-        const id = url.pathname.split('/embed/')[1]?.split(/[\/\?#]/)[0];
-        if (id) problemSlugOrId = id;
-      } else if (url.pathname.includes('/live/')) {
-        const id = url.pathname.split('/live/')[1]?.split(/[\/\?#]/)[0];
-        if (id) problemSlugOrId = id;
-      } else {
-        const id = url.searchParams.get('v');
-        if (id) {
-          problemSlugOrId = id;
-        } else {
-          const parts = url.pathname.replace(/^\/+/, '').split(/[\/\?#]/);
-          if (parts.length > 0 && parts[0]) problemSlugOrId = parts[0];
-        }
-      }
-    }
-  } catch (e) {
-    return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
-  }
-
-  if (!platform || !problemSlugOrId) {
+  const parsed = parseTaskLink(link);
+  if (!parsed) {
     return NextResponse.json(
       { error: 'Could not parse link. Ensure it is a valid Codeforces, LeetCode, or YouTube link.' },
       { status: 400 }
@@ -115,16 +64,51 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const today = new Date().toISOString().split('T')[0];
+  const todayIST = getTodayIST();
+  const targetDate = scheduled_date ? String(scheduled_date).trim() : todayIST;
 
-  // Create tasks for each mentee
+  // If a future date within a week was requested, route to scheduled_tasks
+  if (targetDate > todayIST) {
+    const maxDateIST = getDateOffsetIST(7);
+    if (targetDate > maxDateIST) {
+      return NextResponse.json({ error: 'You can only schedule questions up to a week (7 days) in advance.' }, { status: 400 });
+    }
+
+    const { data: scheduledTask, error: schedError } = await supabase
+      .from('scheduled_tasks')
+      .insert({
+        mentor_id: user.id,
+        platform: parsed.platform,
+        problem_slug_or_id: parsed.problemSlugOrId,
+        scheduled_date: targetDate,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (schedError) {
+      return NextResponse.json(
+        { error: `Failed to schedule task: ${schedError.message}` },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      scheduled: true,
+      message: `Question scheduled for ${targetDate}. It will roll out automatically at 00:00 AM IST!`,
+      scheduledTask,
+    });
+  }
+
+  // Immediate assignment for today (IST)
   const taskRows = mentorships.map((m) => ({
     assigned_by: user.id,
     assigned_to: m.mentee_id,
-    platform,
-    problem_slug_or_id: problemSlugOrId,
+    platform: parsed.platform,
+    problem_slug_or_id: parsed.problemSlugOrId,
     status: 'Pending',
-    assigned_date: today,
+    assigned_date: todayIST,
   }));
 
   const { data: tasks, error: insertError } = await supabase

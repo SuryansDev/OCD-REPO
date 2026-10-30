@@ -7,12 +7,12 @@ import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import PlatformBadge from '@/components/PlatformBadge';
 import Confetti from '@/components/Confetti';
-import type { UserProfile, Task } from '@/lib/types';
+import type { UserProfile, Task, ScheduledTask } from '@/lib/types';
 import {
   Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2,
   Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink,
   Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight, Check,
-  Video, CheckSquare, Square
+  Video, CheckSquare, Square, Calendar, Trash2
 } from 'lucide-react';
 import {
   cleanCodeforcesHandle,
@@ -20,6 +20,7 @@ import {
   getCodeforcesProfileUrl,
   getLeetCodeProfileUrl,
 } from '@/lib/handles';
+import { getTodayIST, getDateOffsetIST, formatScheduledDateLabel } from '@/lib/dateUtils';
 
 const getTaskLink = (task: any) => {
   if (task.platform === 'LeetCode') {
@@ -67,6 +68,9 @@ export default function Dashboard() {
   const [menteeAllTasks, setMenteeAllTasks] = useState<any[]>([]);
   const [taskLink, setTaskLink] = useState('');
   const [assigning, setAssigning] = useState(false);
+  const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([]);
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState<string>(() => getTodayIST());
+  const [deletingScheduledId, setDeletingScheduledId] = useState<number | null>(null);
 
   // Request mentor state
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
@@ -135,6 +139,17 @@ export default function Dashboard() {
     // Fetch tasks I assigned (with mentee details)
     const { data: aTasks } = await supabase.from('tasks').select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email)').eq('assigned_by', user.id).order('created_at', { ascending: false });
     if (aTasks) setAssignedTasks(aTasks);
+
+    // Fetch upcoming scheduled tasks for this mentor
+    try {
+      const schedRes = await fetch('/api/tasks/schedule');
+      if (schedRes.ok) {
+        const schedData = await schedRes.json();
+        if (schedData.scheduledTasks) {
+          setScheduledTasks(schedData.scheduledTasks);
+        }
+      }
+    } catch { }
 
     // Fetch all eligible users for requesting mentors (approved non-admin members only)
     const { data: users } = await supabase
@@ -229,6 +244,20 @@ export default function Dashboard() {
     return stats;
   }, [myMentees, menteeAllTasks]);
 
+  const todayIST = useMemo(() => getTodayIST(), []);
+  const maxScheduleDateIST = useMemo(() => getDateOffsetIST(7), []);
+  const scheduleDays = useMemo(() => {
+    return Array.from({ length: 8 }, (_, i) => {
+      const dateStr = getDateOffsetIST(i);
+      return {
+        date: dateStr,
+        label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : `+${i}d`,
+        fullLabel: formatScheduledDateLabel(dateStr, todayIST),
+        isToday: i === 0,
+      };
+    });
+  }, [todayIST]);
+
 
   const handleToggleSelfCheck = async (task: Task) => {
     if (togglingTaskId !== null) return;
@@ -293,23 +322,48 @@ export default function Dashboard() {
     setAssigning(true);
 
     try {
-      const res = await fetch('/api/tasks', {
+      const res = await fetch('/api/tasks/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ link: taskLink }),
+        body: JSON.stringify({
+          link: taskLink,
+          scheduled_date: selectedScheduleDate,
+        }),
       });
 
       const data = await res.json();
       if (res.ok) {
         setTaskLink('');
-        fetchData();
+        setSelectedScheduleDate(getTodayIST());
+        await fetchData();
+        alert(data.message || 'Task processed successfully!');
       } else {
-        alert(data.error || 'Failed to assign task');
+        alert(data.error || 'Failed to assign or schedule task');
       }
     } catch (e) {
       alert('Network error.');
     }
     setAssigning(false);
+  };
+
+  const handleDeleteScheduledTask = async (id: number) => {
+    if (!confirm('Are you sure you want to cancel this scheduled question?')) return;
+    setDeletingScheduledId(id);
+
+    try {
+      const res = await fetch(`/api/tasks/schedule?id=${id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setScheduledTasks((prev) => prev.filter((t) => t.id !== id));
+      } else {
+        alert(data.error || 'Failed to cancel scheduled task');
+      }
+    } catch {
+      alert('Network error.');
+    }
+    setDeletingScheduledId(null);
   };
 
   const handleRequestMentor = async (e: React.FormEvent) => {
@@ -1824,19 +1878,28 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Assign Tasks */}
+            {/* Assign or Schedule Tasks */}
             <div className="card p-6 border-brand-200 border-2 bg-brand-50/30 flex flex-col">
-              <h3 className="text-lg font-bold text-surface-900 mb-1">Assign Task to Cohort</h3>
-              <p className="text-sm text-surface-500 mb-6">Paste a Codeforces, LeetCode, or YouTube video URL. It will be assigned to all your approved mentees.</p>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-2">
+                <div>
+                  <h3 className="text-lg font-bold text-surface-900">Assign or Schedule Question</h3>
+                  <p className="text-xs text-surface-500 mt-0.5">
+                    Paste a link to assign immediately or schedule up to a week in advance. Scheduled questions roll out automatically every day at <strong>00:00 AM IST</strong>.
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-100 text-brand-800 border border-brand-200 shrink-0">
+                  <Clock className="w-3 h-3 text-brand-600" /> Auto-sync: 00:00 AM IST
+                </span>
+              </div>
 
-              <form onSubmit={handleAssignTask} className="space-y-4">
+              <form onSubmit={handleAssignTask} className="space-y-4 mt-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Problem or Video Link</label>
                   <div className="relative">
                     <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
                     <input
                       type="url"
-                      placeholder="https://leetcode.com/problems/... or https://youtu.be/..."
+                      placeholder="https://leetcode.com/problems/... or https://codeforces.com/... or https://youtu.be/..."
                       value={taskLink}
                       onChange={(e) => setTaskLink(e.target.value)}
                       className="input-field pl-10 bg-white"
@@ -1846,27 +1909,156 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* Rollout Date Selector */}
+                <div className="space-y-2 bg-white/80 p-3.5 rounded-xl border border-brand-100 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-surface-800 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-brand-600" /> Rollout Schedule (Next 7 Days)
+                    </label>
+                    <input
+                      type="date"
+                      min={todayIST}
+                      max={maxScheduleDateIST}
+                      value={selectedScheduleDate}
+                      onChange={(e) => setSelectedScheduleDate(e.target.value)}
+                      className="text-xs border border-surface-200 rounded-lg px-2 py-1 bg-white font-mono focus:outline-brand-500"
+                      disabled={myMentees.length === 0}
+                    />
+                  </div>
+
+                  {/* Quick selection chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {scheduleDays.map((d) => {
+                      const isSelected = selectedScheduleDate === d.date;
+                      return (
+                        <button
+                          key={d.date}
+                          type="button"
+                          onClick={() => setSelectedScheduleDate(d.date)}
+                          disabled={myMentees.length === 0}
+                          className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
+                            isSelected
+                              ? 'bg-brand-600 text-white shadow-xs font-bold'
+                              : 'bg-white hover:bg-brand-50 text-surface-700 border border-surface-200'
+                          }`}
+                          title={d.fullLabel}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Informational rollout helper */}
+                  <div className="text-[11px] text-surface-500 pt-1">
+                    {selectedScheduleDate === todayIST ? (
+                      <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                        ⚡ Assigning for <strong>Today</strong> — will roll out to all mentees immediately.
+                      </span>
+                    ) : (
+                      <span className="text-amber-800 font-medium flex items-center gap-1">
+                        ⏰ Scheduled for <strong>{formatScheduledDateLabel(selectedScheduleDate, todayIST)}</strong> — will roll out automatically to all mentees when the sync runs at <strong>00:00 AM IST</strong>.
+                      </span>
+                    )}
+                  </div>
+                </div>
+
                 <button
                   type="submit"
                   disabled={assigning || myMentees.length === 0}
                   className="btn-primary w-full"
                 >
-                  {assigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
-                  Assign Task
+                  {assigning ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : selectedScheduleDate === todayIST ? (
+                    <>
+                      <PlusCircle className="w-4 h-4" /> Assign Task (Roll out now)
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="w-4 h-4" /> Schedule Question for {formatScheduledDateLabel(selectedScheduleDate, todayIST)}
+                    </>
+                  )}
                 </button>
                 {myMentees.length === 0 && (
                   <p className="text-xs text-amber-600 text-center font-medium mt-2">
-                    You need at least one mentee to assign tasks.
+                    You need at least one mentee to assign or schedule tasks.
                   </p>
                 )}
               </form>
 
-              <div className="mt-8 pt-6 border-t border-brand-100 flex-1 flex flex-col min-h-0">
-                <h4 className="text-sm font-bold text-surface-900 mb-3">Recently Assigned (Click for details)</h4>
+              {/* Scheduled Questions Queue (Next 7 Days) */}
+              <div className="mt-6 pt-5 border-t border-brand-200">
+                <div className="flex items-center justify-between mb-2.5">
+                  <h4 className="text-xs font-bold text-surface-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-brand-600" />
+                    Scheduled Questions Queue
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-brand-100 text-brand-800">
+                      {scheduledTasks.length}
+                    </span>
+                  </h4>
+                  <span className="text-[10px] text-surface-400 font-medium">Rolls out daily at 00:00 AM IST</span>
+                </div>
+
+                {scheduledTasks.length === 0 ? (
+                  <div className="p-3 bg-white/60 rounded-xl border border-dashed border-brand-200 text-center text-xs text-surface-500">
+                    No questions scheduled for upcoming days. Pick an upcoming date above to queue questions for the week ahead!
+                  </div>
+                ) : (
+                  <ul className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {scheduledTasks.map((task) => (
+                      <li
+                        key={task.id}
+                        className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white border border-brand-100 shadow-2xs hover:border-brand-300 transition-all"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-semibold text-brand-800 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded text-[11px] whitespace-nowrap">
+                            {formatScheduledDateLabel(task.scheduled_date, todayIST)}
+                          </span>
+                          <span className="font-bold text-surface-900 truncate">
+                            {formatProblemTitle(task.problem_slug_or_id, task.platform)}
+                          </span>
+                          <a
+                            href={getTaskLink(task)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-surface-400 hover:text-brand-600 transition-colors shrink-0"
+                            title="Open Problem Link"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <PlatformBadge platform={task.platform} />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteScheduledTask(task.id)}
+                            disabled={deletingScheduledId === task.id}
+                            className="p-1 rounded text-surface-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Cancel scheduled question"
+                          >
+                            {deletingScheduledId === task.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Recently Assigned Active Tasks */}
+              <div className="mt-6 pt-5 border-t border-brand-100 flex-1 flex flex-col min-h-0">
+                <h4 className="text-xs font-bold text-surface-900 uppercase tracking-wider mb-2.5">
+                  Recently Assigned (Active Cohort Tasks)
+                </h4>
                 {groupedTasks.length === 0 ? (
                   <p className="text-xs text-surface-500">No tasks assigned yet.</p>
                 ) : (
-                  <ul className="space-y-2 overflow-y-auto pr-2">
+                  <ul className="space-y-2 overflow-y-auto pr-2 max-h-64">
                     {groupedTasks.map(group => (
                       <li
                         key={group.key}
