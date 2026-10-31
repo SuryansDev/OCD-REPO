@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cleanCodeforcesHandle, cleanLeetCodeHandle } from '@/lib/handles';
 import type { PlatformSyncStatus } from '@/lib/types';
-import { executeDailySync } from '@/lib/syncEngine';
+import { executeDailySync, rollOutScheduledTasks } from '@/lib/syncEngine';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 function createRouteHandlerClient(request: NextRequest) {
@@ -180,19 +180,78 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: stats, error } = await supabase
-    .from('user_stats')
-    .select('*, user:users!user_stats_user_id_fkey(id, full_name, email, year, cf_handle, lc_handle, role, approval_status)')
-    .order('synced_at', { ascending: false });
+  const adminClient = createAdminSupabaseClient();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // 1. Automatically roll out any scheduled tasks that became due today or earlier in IST
+  try {
+    await rollOutScheduledTasks(adminClient);
+  } catch (err) {
+    console.error('[Leaderboard API] Rollout check error:', err);
   }
 
-  // Strictly filter out admin and deactivated/non-approved accounts
-  const activeStats = (stats || []).filter(
-    (s: any) => s.user && s.user.role !== 'admin' && s.user.approval_status === 'approved'
-  );
+  // 2. Fetch all non-admin users from users table
+  const { data: allUsers, error: usersError } = await adminClient
+    .from('users')
+    .select('id, full_name, email, year, branch, roll_number, cf_handle, lc_handle, role, approval_status, created_at')
+    .neq('role', 'admin');
+
+  if (usersError) {
+    return NextResponse.json({ error: usersError.message }, { status: 500 });
+  }
+
+  // Filter: Put everyone in leaderboard except the admins (already filtered above)
+  // and the people who have not filled their profiles (must have valid roll_number and year).
+  const eligibleUsers = (allUsers || []).filter((u: any) => {
+    if (u.role === 'admin' || u.approval_status === 'rejected') return false;
+    const hasRoll = Boolean(u.roll_number && String(u.roll_number).trim() !== '');
+    const hasYear = Boolean(u.year && String(u.year).trim() !== '');
+    return hasRoll && hasYear;
+  });
+
+  // Fetch all existing user_stats
+  const { data: statsList } = await adminClient
+    .from('user_stats')
+    .select('*');
+
+  const statsMap = new Map<string, any>();
+  (statsList || []).forEach((s: any) => {
+    statsMap.set(s.user_id, s);
+  });
+
+  // Combine every eligible user with their stats (or default 0 stats if not yet synced)
+  const activeStats = eligibleUsers.map((u: any) => {
+    const s = statsMap.get(u.id);
+    if (s) {
+      return {
+        ...s,
+        user: u,
+      };
+    }
+    return {
+      user_id: u.id,
+      lc_rating: 0,
+      lc_total_solved: 0,
+      lc_latest_contest_name: null,
+      lc_latest_contest_rank: null,
+      lc_latest_contest_rating: null,
+      lc_latest_contest_solved: null,
+      lc_latest_contest_date: null,
+      cf_rating: 0,
+      cf_max_rating: 0,
+      cf_total_solved: 0,
+      cf_latest_contest_name: null,
+      cf_latest_contest_rank: null,
+      cf_latest_contest_rating: null,
+      cf_latest_contest_date: null,
+      current_streak: 0,
+      max_streak: 0,
+      last_solve_date: null,
+      lc_status: 'unknown',
+      cf_status: 'unknown',
+      synced_at: null,
+      user: u,
+    };
+  });
 
   const latestContests = await getLatestContests();
 

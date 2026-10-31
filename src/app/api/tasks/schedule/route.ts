@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { parseTaskLink } from '@/lib/taskParser';
 import { getTodayIST, getDateOffsetIST } from '@/lib/dateUtils';
+import { rollOutScheduledTasks } from '@/lib/syncEngine';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;
@@ -30,6 +32,14 @@ export async function GET(request: NextRequest) {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Automatically roll out any scheduled tasks that became due today or earlier in IST
+  try {
+    const adminClient = createAdminSupabaseClient();
+    await rollOutScheduledTasks(adminClient);
+  } catch (err) {
+    console.error('[Schedule API] Error auto-rolling out due tasks:', err);
   }
 
   const { data: scheduledTasks, error } = await supabase

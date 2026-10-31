@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { parseTaskLink } from '@/lib/taskParser';
 import { getTodayIST, getDateOffsetIST } from '@/lib/dateUtils';
+import { rollOutScheduledTasks } from '@/lib/syncEngine';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;
@@ -24,6 +26,36 @@ function createRouteHandlerClient(request: NextRequest) {
       },
     }
   );
+}
+
+// GET /api/tasks — roll out any due tasks and return tasks assigned to user
+export async function GET(request: NextRequest) {
+  const supabase = createRouteHandlerClient(request);
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Trigger rollout of any scheduled tasks that became due today (IST) or earlier
+  try {
+    const adminClient = createAdminSupabaseClient();
+    await rollOutScheduledTasks(adminClient);
+  } catch (err) {
+    console.error('[Tasks API] Rollout check error:', err);
+  }
+
+  const { data: tasks, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('assigned_to', user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ tasks: tasks || [] });
 }
 
 // POST /api/tasks — bulk create tasks for all mentees (or schedule if scheduled_date is provided)

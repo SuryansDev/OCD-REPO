@@ -1,5 +1,6 @@
-import { getMsUntilNextMidnightIST, getTodayIST } from '@/lib/dateUtils';
-import { executeDailySync } from '@/lib/syncEngine';
+import { getMsUntilNextMidnightIST, getTodayIST } from './dateUtils';
+import { executeDailySync, rollOutScheduledTasks } from './syncEngine';
+import { createAdminSupabaseClient } from './supabase/admin';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -19,6 +20,24 @@ export function initAutoRefreshScheduler() {
   }
 
   globalThis.__ocdSchedulerInitialized = true;
+
+  // Immediately roll out any scheduled tasks that became due while the server was offline
+  try {
+    const adminClient = createAdminSupabaseClient();
+    rollOutScheduledTasks(adminClient)
+      .then((res) => {
+        if (res.rolledOutCount > 0) {
+          console.log(
+            `[AutoRefresh] Startup catch-up: Rolled out ${res.rolledOutCount} scheduled task(s) (${res.totalTasksCreated} mentee tasks assigned).`
+          );
+        }
+      })
+      .catch((err) => {
+        console.error('[AutoRefresh] Startup catch-up rollout error:', err);
+      });
+  } catch (err) {
+    console.error('[AutoRefresh] Could not initialize startup catch-up client:', err);
+  }
 
   function scheduleNextRun() {
     const msUntilMidnight = getMsUntilNextMidnightIST();

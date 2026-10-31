@@ -115,7 +115,19 @@ export default function Dashboard() {
       setShowPromotion(true);
     }
 
-    // Fetch tasks assigned to me
+    // 1. Immediately roll out any scheduled tasks that became due today (IST)
+    // and fetch upcoming scheduled tasks for this mentor
+    try {
+      const schedRes = await fetch('/api/tasks/schedule');
+      if (schedRes.ok) {
+        const schedData = await schedRes.json();
+        if (schedData.scheduledTasks) {
+          setScheduledTasks(schedData.scheduledTasks);
+        }
+      }
+    } catch { }
+
+    // 2. Fetch tasks assigned to me (now includes any scheduled tasks rolled out for today!)
     const { data: mTasks } = await supabase.from('tasks').select('*').eq('assigned_to', user.id).order('created_at', { ascending: false });
     if (mTasks) setMyTasks(mTasks);
 
@@ -136,20 +148,9 @@ export default function Dashboard() {
       if (allMenteeTasks) setMenteeAllTasks(allMenteeTasks);
     }
 
-    // Fetch tasks I assigned (with mentee details)
+    // Fetch tasks I assigned (with mentee details, including today's rolled out tasks)
     const { data: aTasks } = await supabase.from('tasks').select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email)').eq('assigned_by', user.id).order('created_at', { ascending: false });
     if (aTasks) setAssignedTasks(aTasks);
-
-    // Fetch upcoming scheduled tasks for this mentor
-    try {
-      const schedRes = await fetch('/api/tasks/schedule');
-      if (schedRes.ok) {
-        const schedData = await schedRes.json();
-        if (schedData.scheduledTasks) {
-          setScheduledTasks(schedData.scheduledTasks);
-        }
-      }
-    } catch { }
 
     // Fetch all eligible users for requesting mentors (approved non-admin members only)
     const { data: users } = await supabase
@@ -173,14 +174,18 @@ export default function Dashboard() {
       .order('created_at', { ascending: false });
     if (incReqs) setIncomingRequests(incReqs);
 
-    // Fetch leaderboard data
+    // Fetch leaderboard data (includes all non-admins who have filled their profiles)
     try {
       const lbRes = await fetch('/api/leaderboard/sync');
       if (lbRes.ok) {
         const lbData = await lbRes.json();
         if (lbData.stats) {
+          const isProfileFilled = (u: any) => Boolean(
+            u && u.roll_number && String(u.roll_number).trim() !== '' &&
+            u.year && String(u.year).trim() !== ''
+          );
           const validStats = lbData.stats.filter(
-            (s: any) => s.user && s.user.role !== 'admin' && s.user.approval_status === 'approved'
+            (s: any) => s.user && s.user.role !== 'admin' && isProfileFilled(s.user)
           );
           setLeaderboardData(validStats);
         }
@@ -1265,7 +1270,9 @@ export default function Dashboard() {
                   <span className="font-medium">
                     {leaderboardYearFilter !== 'all'
                       ? `Your Ranking: You are in Year ${profile?.year || 'N/A'} (Filtered: Year ${leaderboardYearFilter})`
-                      : 'Your Ranking: Not yet ranked in this category'}
+                      : profile?.role === 'admin'
+                        ? 'Admin Account: Admins are excluded from public student rankings'
+                        : 'Your Ranking: Not yet ranked in this category'}
                   </span>
                   <span className="text-surface-400 text-[11px]">—</span>
                 </div>

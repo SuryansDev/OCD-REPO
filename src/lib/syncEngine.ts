@@ -1,7 +1,7 @@
-import { cleanCodeforcesHandle, cleanLeetCodeHandle } from '@/lib/handles';
-import type { PlatformSyncStatus } from '@/lib/types';
-import { getTodayIST } from '@/lib/dateUtils';
-import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { cleanCodeforcesHandle, cleanLeetCodeHandle } from './handles';
+import type { PlatformSyncStatus } from './types';
+import { getTodayIST } from './dateUtils';
+import { createAdminSupabaseClient } from './supabase/admin';
 
 interface CFInfoResult {
   ok: boolean;
@@ -338,14 +338,13 @@ export async function rollOutScheduledTasks(supabase: any, targetDateIST?: strin
 
 // ─── Sync Leaderboard Rankings ──────────────────────────────
 export async function syncLeaderboardRankings(supabase: any) {
-  // Fetch all approved non-admin users with handles
-  const { data: users, error: usersError } = await supabase
+  // Fetch all non-admin users from users table
+  const { data: allUsers, error: usersError } = await supabase
     .from('users')
-    .select('id, full_name, email, cf_handle, lc_handle')
-    .eq('approval_status', 'approved')
+    .select('id, full_name, email, year, roll_number, cf_handle, lc_handle, approval_status, role')
     .neq('role', 'admin');
 
-  if (usersError || !users) {
+  if (usersError || !allUsers) {
     return {
       synced: 0,
       total: 0,
@@ -354,11 +353,20 @@ export async function syncLeaderboardRankings(supabase: any) {
     };
   }
 
-  // Clean up any user_stats for users that are deactivated or admin
+  // Filter: Put everyone in leaderboard except admins (already filtered above)
+  // and people who have not filled their profiles (must have valid roll_number and year).
+  const users = allUsers.filter((u: any) => {
+    if (u.role === 'admin' || u.approval_status === 'rejected') return false;
+    const hasRoll = Boolean(u.roll_number && String(u.roll_number).trim() !== '');
+    const hasYear = Boolean(u.year && String(u.year).trim() !== '');
+    return hasRoll && hasYear;
+  });
+
+  // Clean up any user_stats ONLY for users that are admins or explicitly rejected
   const { data: invalidUsers } = await supabase
     .from('users')
     .select('id')
-    .or('approval_status.neq.approved,role.eq.admin');
+    .or('role.eq.admin,approval_status.eq.rejected');
 
   if (invalidUsers && invalidUsers.length > 0) {
     const invalidIds = invalidUsers.map((u: any) => u.id);
