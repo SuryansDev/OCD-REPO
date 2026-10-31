@@ -581,7 +581,7 @@ export async function executeDailySync(options?: {
   const source = options?.source || 'cron';
   const targetDateIST = options?.targetDateIST || getTodayIST();
 
-  console.log(`[AutoRefresh] Starting daily sync at 00:00 AM IST (date: ${targetDateIST}, source: ${source})...`);
+  console.log(`[AutoRefresh] Starting daily sync at 4:00 AM IST (date: ${targetDateIST}, source: ${source})...`);
 
   // Step 1: Roll out scheduled questions due today or earlier in IST
   const rolloutResult = await rollOutScheduledTasks(supabase, targetDateIST);

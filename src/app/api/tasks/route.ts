@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       scheduled: true,
-      message: `Question scheduled for ${targetDate}. It will roll out automatically at 00:00 AM IST!`,
+      message: `Question scheduled for ${targetDate}. It will roll out automatically at 4:00 AM IST!`,
       scheduledTask,
     });
   }

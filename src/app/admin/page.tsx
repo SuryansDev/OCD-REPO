@@ -429,11 +429,11 @@ Please update your profile settings so your contest ratings and tasks can sync p
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-lg font-bold text-surface-900">Sync Leaderboard &amp; Cohort Tasks</h3>
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" /> Auto-Sync: 00:00 AM IST
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" /> Auto-Sync: 4:00 AM IST
                   </span>
                 </div>
                 <p className="text-xs text-surface-600 mt-1 leading-relaxed">
-                  Automatically runs daily at <strong>00:00 AM IST</strong> to roll out mentors&apos; scheduled questions and sync LeetCode &amp; Codeforces ratings, streaks, solved counts, and privacy status for all students.
+                  Automatically runs daily at <strong>4:00 AM IST</strong> to roll out mentors&apos; scheduled questions and sync LeetCode &amp; Codeforces ratings, streaks, solved counts, and privacy status for all students.
                 </p>
               </div>
               <div className="mt-4 pt-4 border-t border-emerald-100 flex items-center justify-between">

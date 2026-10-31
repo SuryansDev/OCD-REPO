@@ -1909,11 +1909,11 @@ export default function Dashboard() {
                 <div>
                   <h3 className="text-lg font-bold text-surface-900">Assign or Schedule Question</h3>
                   <p className="text-xs text-surface-500 mt-0.5">
-                    Paste a link to assign immediately or schedule up to a week in advance. Scheduled questions roll out automatically every day at <strong>00:00 AM IST</strong>.
+                    Paste a link to assign immediately or schedule up to a week in advance. Scheduled questions roll out automatically every day at <strong>4:00 AM IST</strong>.
                   </p>
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-100 text-brand-800 border border-brand-200 shrink-0">
-                  <Clock className="w-3 h-3 text-brand-600" /> Auto-sync: 00:00 AM IST
+                  <Clock className="w-3 h-3 text-brand-600" /> Auto-sync: 4:00 AM IST
                 </span>
               </div>
 
@@ -1980,7 +1980,7 @@ export default function Dashboard() {
                       </span>
                     ) : (
                       <span className="text-amber-800 font-medium flex items-center gap-1">
-                        ⏰ Scheduled for <strong>{formatScheduledDateLabel(selectedScheduleDate, todayIST)}</strong> — will roll out automatically to all mentees when the sync runs at <strong>00:00 AM IST</strong>.
+                        ⏰ Scheduled for <strong>{formatScheduledDateLabel(selectedScheduleDate, todayIST)}</strong> — will roll out automatically to all mentees when the sync runs at <strong>4:00 AM IST</strong>.
                       </span>
                     )}
                   </div>
@@ -2020,7 +2020,7 @@ export default function Dashboard() {
                       {scheduledTasks.length}
                     </span>
                   </h4>
-                  <span className="text-[10px] text-surface-400 font-medium">Rolls out daily at 00:00 AM IST</span>
+                  <span className="text-[10px] text-surface-400 font-medium">Rolls out daily at 4:00 AM IST</span>
                 </div>
 
                 {scheduledTasks.length === 0 ? (

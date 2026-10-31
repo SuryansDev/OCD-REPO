@@ -60,15 +60,18 @@ export function formatScheduledDateLabel(dateStr: string, todayStr?: string): st
 }
 
 /**
- * Calculates milliseconds remaining until the next 00:00:00 AM IST.
+ * Calculates milliseconds remaining until the next 4:00:00 AM IST daily sync.
  */
-export function getMsUntilNextMidnightIST(): number {
+export function getMsUntilNextScheduledSyncIST(targetHour: number = 4, targetMinute: number = 0): number {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
     hour12: false,
   });
 
@@ -76,12 +79,24 @@ export function getMsUntilNextMidnightIST(): number {
   const y = parseInt(parts.year, 10);
   const m = parseInt(parts.month, 10) - 1;
   const d = parseInt(parts.day, 10);
+  const currentHour = parseInt(parts.hour, 10);
+  const currentMinute = parseInt(parts.minute, 10);
 
-  // Next midnight IST is (y, m, d + 1, 0, 0, 0) in IST.
+  // If already past targetHour:targetMinute today in IST, schedule for tomorrow (d + 1)
+  const isPastToday = currentHour > targetHour || (currentHour === targetHour && currentMinute >= targetMinute);
+  const targetDay = isPastToday ? d + 1 : d;
+
   // IST offset is UTC+5:30 = 19,800,000 ms
   const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-  const nextMidnightIstUtcMs = Date.UTC(y, m, d + 1, 0, 0, 0) - IST_OFFSET_MS;
-  const msUntil = nextMidnightIstUtcMs - now.getTime();
+  const nextTargetIstUtcMs = Date.UTC(y, m, targetDay, targetHour, targetMinute, 0) - IST_OFFSET_MS;
+  const msUntil = nextTargetIstUtcMs - now.getTime();
   return msUntil > 0 ? msUntil : 1000;
+}
+
+/**
+ * Backward compatibility alias for 4:00 AM IST sync.
+ */
+export function getMsUntilNextMidnightIST(): number {
+  return getMsUntilNextScheduledSyncIST(4, 0);
 }
 

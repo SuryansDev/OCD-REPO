@@ -10,7 +10,7 @@ declare global {
 }
 
 /**
- * In-process background scheduler for daily sync at 00:00 AM IST.
+ * In-process background scheduler for daily sync at 4:00 AM IST.
  * Ensures the sync runs automatically even when self-hosted or run locally
  * without requiring external webhooks or third-party cron services.
  */
@@ -40,10 +40,10 @@ export function initAutoRefreshScheduler() {
   }
 
   function scheduleNextRun() {
-    const msUntilMidnight = getMsUntilNextMidnightIST();
-    const hours = (msUntilMidnight / (1000 * 60 * 60)).toFixed(2);
+    const msUntilSync = getMsUntilNextMidnightIST();
+    const hours = (msUntilSync / (1000 * 60 * 60)).toFixed(2);
     console.log(
-      `[AutoRefresh] In-process scheduler active. Next daily sync scheduled at 00:00 AM IST (in ${hours} hours, current IST date: ${getTodayIST()}).`
+      `[AutoRefresh] In-process scheduler active. Next daily sync scheduled at 4:00 AM IST (in ${hours} hours, current IST date: ${getTodayIST()}).`
     );
 
     if (globalThis.__ocdSchedulerTimer) {
@@ -52,15 +52,15 @@ export function initAutoRefreshScheduler() {
 
     globalThis.__ocdSchedulerTimer = setTimeout(async () => {
       try {
-        console.log('[AutoRefresh] Midnight IST reached (00:00 AM IST). Executing automatic daily sync...');
+        console.log('[AutoRefresh] 4:00 AM IST reached. Executing automatic daily sync...');
         await executeDailySync({ source: 'auto_scheduler' });
       } catch (err) {
         console.error('[AutoRefresh] Error during automatic daily sync:', err);
       } finally {
-        // Schedule next midnight run
+        // Schedule next daily run
         scheduleNextRun();
       }
-    }, msUntilMidnight);
+    }, msUntilSync);
   }
 
   scheduleNextRun();
