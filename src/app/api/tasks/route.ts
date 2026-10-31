@@ -99,12 +99,21 @@ export async function POST(request: NextRequest) {
   const todayIST = getTodayIST();
   const targetDate = scheduled_date ? String(scheduled_date).trim() : todayIST;
 
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+    return NextResponse.json({ error: 'Invalid scheduled_date format. Must be YYYY-MM-DD.' }, { status: 400 });
+  }
+
+  if (targetDate < todayIST) {
+    return NextResponse.json({ error: 'Scheduled date cannot be in the past.' }, { status: 400 });
+  }
+
+  const maxDateIST = getDateOffsetIST(7);
+  if (targetDate > maxDateIST) {
+    return NextResponse.json({ error: 'You can only schedule questions up to a week (7 days) in advance.' }, { status: 400 });
+  }
+
   // If a future date within a week was requested, route to scheduled_tasks
   if (targetDate > todayIST) {
-    const maxDateIST = getDateOffsetIST(7);
-    if (targetDate > maxDateIST) {
-      return NextResponse.json({ error: 'You can only schedule questions up to a week (7 days) in advance.' }, { status: 400 });
-    }
 
     const { data: scheduledTask, error: schedError } = await supabase
       .from('scheduled_tasks')

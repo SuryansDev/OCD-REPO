@@ -251,6 +251,14 @@ export default function Dashboard() {
 
   const todayIST = useMemo(() => getTodayIST(), []);
   const maxScheduleDateIST = useMemo(() => getDateOffsetIST(7), []);
+  const formattedSelectedDateDisplay = useMemo(() => {
+    if (!selectedScheduleDate) return '';
+    const parts = selectedScheduleDate.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`; // DD/MM/YYYY
+    }
+    return selectedScheduleDate;
+  }, [selectedScheduleDate]);
   const scheduleDays = useMemo(() => {
     return Array.from({ length: 8 }, (_, i) => {
       const dateStr = getDateOffsetIST(i);
@@ -324,6 +332,16 @@ export default function Dashboard() {
   const handleAssignTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskLink || myMentees.length === 0) return;
+
+    // Strict boundary enforcement: must be between today and 7 days ahead
+    const today = getTodayIST();
+    const maxDate = getDateOffsetIST(7);
+    let targetDate = selectedScheduleDate;
+    if (!targetDate || targetDate < today || targetDate > maxDate) {
+      targetDate = today;
+      setSelectedScheduleDate(today);
+    }
+
     setAssigning(true);
 
     try {
@@ -332,7 +350,7 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           link: taskLink,
-          scheduled_date: selectedScheduleDate,
+          scheduled_date: targetDate,
         }),
       });
 
@@ -1922,15 +1940,13 @@ export default function Dashboard() {
                     <label className="text-xs font-bold text-surface-800 flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5 text-brand-600" /> Rollout Schedule (Next 7 Days)
                     </label>
-                    <input
-                      type="date"
-                      min={todayIST}
-                      max={maxScheduleDateIST}
-                      value={selectedScheduleDate}
-                      onChange={(e) => setSelectedScheduleDate(e.target.value)}
-                      className="text-xs border border-surface-200 rounded-lg px-2 py-1 bg-white font-mono focus:outline-brand-500"
-                      disabled={myMentees.length === 0}
-                    />
+                    <div
+                      className="inline-flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-lg bg-surface-100/90 text-surface-700 border border-surface-200 select-none shadow-2xs"
+                      title="Selected rollout date (use quick selection chips below to change)"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+                      <span>{formattedSelectedDateDisplay}</span>
+                    </div>
                   </div>
 
                   {/* Quick selection chips */}
