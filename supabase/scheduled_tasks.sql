@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.scheduled_tasks (
   mentor_id           UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   platform            TEXT NOT NULL CHECK (platform IN ('Codeforces', 'LeetCode', 'YouTube')),
   problem_slug_or_id  TEXT NOT NULL,
+  target_year         TEXT,
   scheduled_date      DATE NOT NULL,
   status              TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'rolled_out', 'cancelled')),
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),

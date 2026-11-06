@@ -1,5 +1,5 @@
 import { getMsUntilNextMidnightIST, getTodayIST } from './dateUtils';
-import { executeDailySync, rollOutScheduledTasks } from './syncEngine';
+import { executeDailySync, rollOutScheduledTasks, triggerDailySyncIfFirstVisitToday } from './syncEngine';
 import { createAdminSupabaseClient } from './supabase/admin';
 
 declare global {
@@ -35,6 +35,10 @@ export function initAutoRefreshScheduler() {
       .catch((err) => {
         console.error('[AutoRefresh] Startup catch-up rollout error:', err);
       });
+
+    triggerDailySyncIfFirstVisitToday(adminClient).catch((err) => {
+      console.error('[AutoRefresh] Startup daily sync check error:', err);
+    });
   } catch (err) {
     console.error('[AutoRefresh] Could not initialize startup catch-up client:', err);
   }

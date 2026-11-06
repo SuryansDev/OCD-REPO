@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'common_mentor' | 'user';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type Platform = 'Codeforces' | 'LeetCode' | 'YouTube';
 export type TaskStatus = 'Pending' | 'Completed';
@@ -9,6 +9,7 @@ export interface ScheduledTask {
   mentor_id: string;
   platform: Platform;
   problem_slug_or_id: string;
+  target_year?: string | null;
   scheduled_date: string;
   status: ScheduledTaskStatus;
   created_at: string;

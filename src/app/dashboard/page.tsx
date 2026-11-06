@@ -12,7 +12,7 @@ import {
   Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2,
   Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink,
   Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight, Check,
-  Video, CheckSquare, Square, Calendar, Trash2
+  Video, CheckSquare, Square, Calendar, Trash2, Users
 } from 'lucide-react';
 import {
   cleanCodeforcesHandle,
@@ -23,33 +23,35 @@ import {
 import { getTodayIST, getDateOffsetIST, formatScheduledDateLabel } from '@/lib/dateUtils';
 
 const getTaskLink = (task: any) => {
+  const cleanId = (task.problem_slug_or_id || '').replace(/::year:.*$/, '');
   if (task.platform === 'LeetCode') {
-    return `https://leetcode.com/problems/${task.problem_slug_or_id}`;
+    return `https://leetcode.com/problems/${cleanId}`;
   } else if (task.platform === 'Codeforces') {
-    const match = task.problem_slug_or_id.match(/^(\d+)([A-Za-z]\d*)$/);
+    const match = cleanId.match(/^(\d+)([A-Za-z]\d*)$/);
     if (match) {
       return `https://codeforces.com/problemset/problem/${match[1]}/${match[2]}`;
-    } else if (task.problem_slug_or_id.includes('/')) {
-      const parts = task.problem_slug_or_id.split('/');
+    } else if (cleanId.includes('/')) {
+      const parts = cleanId.split('/');
       return `https://codeforces.com/problemset/problem/${parts[0]}/${parts[1]}`;
     }
-    return `https://codeforces.com/problemset/problem/${task.problem_slug_or_id}`;
+    return `https://codeforces.com/problemset/problem/${cleanId}`;
   } else if (task.platform === 'YouTube') {
-    return `https://www.youtube.com/watch?v=${task.problem_slug_or_id}`;
+    return `https://www.youtube.com/watch?v=${cleanId}`;
   }
   return '#';
 };
 
 const formatProblemTitle = (slugOrId: string, platform: string) => {
+  const cleanSlug = (slugOrId || '').replace(/::year:.*$/, '');
   if (platform === 'LeetCode') {
-    return slugOrId
+    return cleanSlug
       .split('-')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(' ');
   } else if (platform === 'YouTube') {
-    return `Video: ${slugOrId}`;
+    return `Video: ${cleanSlug}`;
   }
-  return slugOrId;
+  return cleanSlug;
 };
 
 export default function Dashboard() {
@@ -70,6 +72,7 @@ export default function Dashboard() {
   const [assigning, setAssigning] = useState(false);
   const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([]);
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string>(() => getTodayIST());
+  const [targetYear, setTargetYear] = useState<string>('');
   const [deletingScheduledId, setDeletingScheduledId] = useState<number | null>(null);
 
   // Request mentor state
@@ -250,7 +253,9 @@ export default function Dashboard() {
   }, [myMentees, menteeAllTasks]);
 
   const todayIST = useMemo(() => getTodayIST(), []);
-  const maxScheduleDateIST = useMemo(() => getDateOffsetIST(7), []);
+  const maxScheduleDateIST = useMemo(() => getDateOffsetIST(30), []);
+  const isCommonMentorOrAdmin = profile?.role === 'common_mentor' || profile?.role === 'admin';
+
   const formattedSelectedDateDisplay = useMemo(() => {
     if (!selectedScheduleDate) return '';
     const parts = selectedScheduleDate.split('-');
@@ -259,17 +264,56 @@ export default function Dashboard() {
     }
     return selectedScheduleDate;
   }, [selectedScheduleDate]);
-  const scheduleDays = useMemo(() => {
-    return Array.from({ length: 8 }, (_, i) => {
+
+  // All 31 days in the 1-month window for dropdown selection
+  const allMonthDays = useMemo(() => {
+    return Array.from({ length: 31 }, (_, i) => {
       const dateStr = getDateOffsetIST(i);
       return {
         date: dateStr,
-        label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : `+${i}d`,
-        fullLabel: formatScheduledDateLabel(dateStr, todayIST),
-        isToday: i === 0,
+        label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : formatScheduledDateLabel(dateStr, todayIST),
+        offset: i,
       };
     });
   }, [todayIST]);
+
+  // Popular quick selection chips (Today, Tomorrow, +2d, +3d, +7d (1w), +14d (2w), +21d (3w), +30d (1m))
+  const quickScheduleChips = useMemo(() => {
+    const offsets = [0, 1, 2, 3, 7, 14, 21, 30];
+    return offsets.map((offset) => {
+      const dateStr = getDateOffsetIST(offset);
+      return {
+        date: dateStr,
+        label:
+          offset === 0
+            ? 'Today'
+            : offset === 1
+            ? 'Tomorrow'
+            : offset === 7
+            ? '1w (+7d)'
+            : offset === 14
+            ? '2w (+14d)'
+            : offset === 21
+            ? '3w (+21d)'
+            : offset === 30
+            ? '1m (+30d)'
+            : `+${offset}d`,
+        fullLabel: formatScheduledDateLabel(dateStr, todayIST),
+        offset,
+      };
+    });
+  }, [todayIST]);
+
+  const yearCounts = useMemo(() => {
+    const counts: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, all: 0 };
+    (allUsers || []).forEach((u) => {
+      counts.all++;
+      if (u.year && counts[u.year] !== undefined) {
+        counts[u.year]++;
+      }
+    });
+    return counts;
+  }, [allUsers]);
 
 
   const handleToggleSelfCheck = async (task: Task) => {
@@ -331,11 +375,16 @@ export default function Dashboard() {
 
   const handleAssignTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!taskLink || myMentees.length === 0) return;
+    if (!taskLink) return;
+    if (!isCommonMentorOrAdmin && myMentees.length === 0) return;
+    if (isCommonMentorOrAdmin && !targetYear && myMentees.length === 0) {
+      alert('Please select a target year of students to assign questions to.');
+      return;
+    }
 
-    // Strict boundary enforcement: must be between today and 7 days ahead
+    // Strict boundary enforcement: must be between today and 30 days ahead
     const today = getTodayIST();
-    const maxDate = getDateOffsetIST(7);
+    const maxDate = getDateOffsetIST(30);
     let targetDate = selectedScheduleDate;
     if (!targetDate || targetDate < today || targetDate > maxDate) {
       targetDate = today;
@@ -351,6 +400,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           link: taskLink,
           scheduled_date: targetDate,
+          target_year: targetYear || undefined,
         }),
       });
 
@@ -1909,15 +1959,46 @@ export default function Dashboard() {
                 <div>
                   <h3 className="text-lg font-bold text-surface-900">Assign or Schedule Question</h3>
                   <p className="text-xs text-surface-500 mt-0.5">
-                    Paste a link to assign immediately or schedule up to a week in advance. Scheduled questions roll out automatically every day at <strong>4:00 AM IST</strong>.
+                    Paste a link to assign immediately or schedule up to a month in advance. Scheduled questions roll out automatically on that day upon first visit.
                   </p>
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-100 text-brand-800 border border-brand-200 shrink-0">
-                  <Clock className="w-3 h-3 text-brand-600" /> Auto-sync: 4:00 AM IST
+                  <Clock className="w-3 h-3 text-brand-600" /> Auto-sync: Daily on First Visit (IST)
                 </span>
               </div>
 
               <form onSubmit={handleAssignTask} className="space-y-4 mt-2">
+                {/* Common Mentor / Admin Target Audience Selector */}
+                {isCommonMentorOrAdmin && (
+                  <div className="space-y-1.5 p-3 rounded-xl bg-purple-50/70 border border-purple-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-purple-600" /> Target Audience (Common Mentor)
+                      </label>
+                      <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full border border-purple-200">
+                        Year-Wide Assignment
+                      </span>
+                    </div>
+                    <select
+                      value={targetYear}
+                      onChange={(e) => setTargetYear(e.target.value)}
+                      className="w-full text-xs border border-purple-200 rounded-lg px-2.5 py-2 bg-white text-surface-800 font-medium focus:outline-purple-500 shadow-2xs"
+                    >
+                      <option value="">My Mentees Cohort ({myMentees.length} mentees)</option>
+                      <option value="1">All 1st Year Students ({yearCounts['1'] || 0} students)</option>
+                      <option value="2">All 2nd Year Students ({yearCounts['2'] || 0} students)</option>
+                      <option value="3">All 3rd Year Students ({yearCounts['3'] || 0} students)</option>
+                      <option value="4">All 4th Year Students ({yearCounts['4'] || 0} students)</option>
+                      <option value="all">All Students Across All Years ({yearCounts.all || 0} students)</option>
+                    </select>
+                    <p className="text-[11px] text-purple-700">
+                      {targetYear
+                        ? `Assigns to all approved students in ${targetYear === 'all' ? 'all years' : 'Year ' + targetYear} regardless of mentor-mentee mapping.`
+                        : 'Default: Assigns to your personally accepted cohort mentees.'}
+                    </p>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Problem or Video Link</label>
                   <div className="relative">
@@ -1929,36 +2010,53 @@ export default function Dashboard() {
                       onChange={(e) => setTaskLink(e.target.value)}
                       className="input-field pl-10 bg-white"
                       required
-                      disabled={myMentees.length === 0}
+                      disabled={!isCommonMentorOrAdmin && myMentees.length === 0}
                     />
                   </div>
                 </div>
 
-                {/* Rollout Date Selector */}
-                <div className="space-y-2 bg-white/80 p-3.5 rounded-xl border border-brand-100 shadow-2xs">
+                {/* Rollout Date Selector (Next 30 Days) */}
+                <div className="space-y-2.5 bg-white/80 p-3.5 rounded-xl border border-brand-100 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-surface-800 flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-brand-600" /> Rollout Schedule (Next 7 Days)
+                      <Calendar className="w-3.5 h-3.5 text-brand-600" /> Rollout Schedule (Next 30 Days)
                     </label>
                     <div
                       className="inline-flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-lg bg-surface-100/90 text-surface-700 border border-surface-200 select-none shadow-2xs"
-                      title="Selected rollout date (use quick selection chips below to change)"
+                      title="Selected rollout date (use dropdown or quick chips below to change)"
                     >
                       <Calendar className="w-3.5 h-3.5 text-brand-600 shrink-0" />
                       <span>{formattedSelectedDateDisplay}</span>
                     </div>
                   </div>
 
+                  {/* Bounded Dropdown Selector (Next 30 Days) */}
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] font-semibold text-surface-600 shrink-0">Select Date:</label>
+                    <select
+                      value={selectedScheduleDate}
+                      onChange={(e) => setSelectedScheduleDate(e.target.value)}
+                      disabled={!isCommonMentorOrAdmin && myMentees.length === 0}
+                      className="w-full text-xs border border-surface-200 rounded-lg px-2.5 py-1.5 bg-white font-mono text-surface-800 focus:outline-brand-500 shadow-2xs"
+                    >
+                      {allMonthDays.map((d) => (
+                        <option key={d.date} value={d.date}>
+                          {d.label} ({d.date.split('-').reverse().join('/')})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   {/* Quick selection chips */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {scheduleDays.map((d) => {
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {quickScheduleChips.map((d) => {
                       const isSelected = selectedScheduleDate === d.date;
                       return (
                         <button
                           key={d.date}
                           type="button"
                           onClick={() => setSelectedScheduleDate(d.date)}
-                          disabled={myMentees.length === 0}
+                          disabled={!isCommonMentorOrAdmin && myMentees.length === 0}
                           className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
                             isSelected
                               ? 'bg-brand-600 text-white shadow-xs font-bold'
@@ -1976,11 +2074,11 @@ export default function Dashboard() {
                   <div className="text-[11px] text-surface-500 pt-1">
                     {selectedScheduleDate === todayIST ? (
                       <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                        ⚡ Assigning for <strong>Today</strong> — will roll out to all mentees immediately.
+                        ⚡ Assigning for <strong>Today</strong> — will roll out immediately.
                       </span>
                     ) : (
                       <span className="text-amber-800 font-medium flex items-center gap-1">
-                        ⏰ Scheduled for <strong>{formatScheduledDateLabel(selectedScheduleDate, todayIST)}</strong> — will roll out automatically to all mentees when the sync runs at <strong>4:00 AM IST</strong>.
+                        ⏰ Scheduled for <strong>{formatScheduledDateLabel(selectedScheduleDate, todayIST)}</strong> — will roll out automatically to all assigned students on that day upon first visit.
                       </span>
                     )}
                   </div>
@@ -1988,7 +2086,7 @@ export default function Dashboard() {
 
                 <button
                   type="submit"
-                  disabled={assigning || myMentees.length === 0}
+                  disabled={assigning || (!isCommonMentorOrAdmin && myMentees.length === 0)}
                   className="btn-primary w-full"
                 >
                   {assigning ? (
@@ -2003,14 +2101,14 @@ export default function Dashboard() {
                     </>
                   )}
                 </button>
-                {myMentees.length === 0 && (
+                {!isCommonMentorOrAdmin && myMentees.length === 0 && (
                   <p className="text-xs text-amber-600 text-center font-medium mt-2">
                     You need at least one mentee to assign or schedule tasks.
                   </p>
                 )}
               </form>
 
-              {/* Scheduled Questions Queue (Next 7 Days) */}
+              {/* Scheduled Questions Queue (Next 30 Days) */}
               <div className="mt-6 pt-5 border-t border-brand-200">
                 <div className="flex items-center justify-between mb-2.5">
                   <h4 className="text-xs font-bold text-surface-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -2020,55 +2118,63 @@ export default function Dashboard() {
                       {scheduledTasks.length}
                     </span>
                   </h4>
-                  <span className="text-[10px] text-surface-400 font-medium">Rolls out daily at 4:00 AM IST</span>
+                  <span className="text-[10px] text-surface-400 font-medium">Rolls out daily on first visit</span>
                 </div>
 
                 {scheduledTasks.length === 0 ? (
                   <div className="p-3 bg-white/60 rounded-xl border border-dashed border-brand-200 text-center text-xs text-surface-500">
-                    No questions scheduled for upcoming days. Pick an upcoming date above to queue questions for the week ahead!
+                    No questions scheduled for upcoming days. Pick an upcoming date above to queue questions for the month ahead!
                   </div>
                 ) : (
                   <ul className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {scheduledTasks.map((task) => (
-                      <li
-                        key={task.id}
-                        className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white border border-brand-100 shadow-2xs hover:border-brand-300 transition-all"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-semibold text-brand-800 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded text-[11px] whitespace-nowrap">
-                            {formatScheduledDateLabel(task.scheduled_date, todayIST)}
-                          </span>
-                          <span className="font-bold text-surface-900 truncate">
-                            {formatProblemTitle(task.problem_slug_or_id, task.platform)}
-                          </span>
-                          <a
-                            href={getTaskLink(task)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-surface-400 hover:text-brand-600 transition-colors shrink-0"
-                            title="Open Problem Link"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <PlatformBadge platform={task.platform} />
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteScheduledTask(task.id)}
-                            disabled={deletingScheduledId === task.id}
-                            className="p-1 rounded text-surface-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                            title="Cancel scheduled question"
-                          >
-                            {deletingScheduledId === task.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
-                            ) : (
-                              <Trash2 className="w-3.5 h-3.5" />
+                    {scheduledTasks.map((task) => {
+                      const taskTargetYear = task.target_year || (task.problem_slug_or_id.includes('::year:') ? task.problem_slug_or_id.split('::year:')[1] : null);
+                      return (
+                        <li
+                          key={task.id}
+                          className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white border border-brand-100 shadow-2xs hover:border-brand-300 transition-all"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-semibold text-brand-800 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded text-[11px] whitespace-nowrap">
+                              {formatScheduledDateLabel(task.scheduled_date, todayIST)}
+                            </span>
+                            {taskTargetYear && (
+                              <span className="font-semibold text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">
+                                {taskTargetYear === 'all' ? 'All Years' : `Year ${taskTargetYear}`}
+                              </span>
                             )}
-                          </button>
-                        </div>
-                      </li>
-                    ))}
+                            <span className="font-bold text-surface-900 truncate">
+                              {formatProblemTitle(task.problem_slug_or_id, task.platform)}
+                            </span>
+                            <a
+                              href={getTaskLink(task)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-surface-400 hover:text-brand-600 transition-colors shrink-0"
+                              title="Open Problem Link"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <PlatformBadge platform={task.platform} />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteScheduledTask(task.id)}
+                              disabled={deletingScheduledId === task.id}
+                              className="p-1 rounded text-surface-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Cancel scheduled question"
+                            >
+                              {deletingScheduledId === task.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>

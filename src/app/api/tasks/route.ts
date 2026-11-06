@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ tasks: tasks || [] });
 }
 
-// POST /api/tasks — bulk create tasks for all mentees (or schedule if scheduled_date is provided)
+// POST /api/tasks — bulk create tasks for all mentees or target year (or schedule if scheduled_date is provided)
 export async function POST(request: NextRequest) {
   const supabase = createRouteHandlerClient(request);
 
@@ -68,8 +68,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Fetch user profile to verify role
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  const userRole = userProfile?.role || 'user';
+  const isCommonMentorOrAdmin = userRole === 'common_mentor' || userRole === 'admin';
+
   const body = await request.json().catch(() => ({}));
-  const { link, scheduled_date } = body;
+  const { link, scheduled_date, target_year } = body;
 
   if (!link) {
     return NextResponse.json({ error: 'link is required' }, { status: 400 });
@@ -83,17 +93,49 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Get all mentees for this mentor
-  const { data: mentorships, error: msError } = await supabase
-    .from('mentorships')
-    .select('mentee_id')
-    .eq('mentor_id', user.id);
+  let targetStudentIds: string[] = [];
+  const normalizedTargetYear = target_year ? String(target_year).trim() : null;
 
-  if (msError || !mentorships?.length) {
-    return NextResponse.json(
-      { error: 'No mentees found. Add mentees to your cohort first.' },
-      { status: 400 }
-    );
+  if (normalizedTargetYear) {
+    if (!isCommonMentorOrAdmin) {
+      return NextResponse.json(
+        { error: 'Only Common Mentors and Admins can assign questions to an entire year.' },
+        { status: 403 }
+      );
+    }
+
+    let studentQuery = supabase
+      .from('users')
+      .select('id')
+      .neq('role', 'admin')
+      .eq('approval_status', 'approved');
+
+    if (normalizedTargetYear !== 'all') {
+      studentQuery = studentQuery.eq('year', normalizedTargetYear);
+    }
+
+    const { data: students, error: studentError } = await studentQuery;
+    if (studentError || !students?.length) {
+      return NextResponse.json(
+        { error: `No approved students found in ${normalizedTargetYear === 'all' ? 'any year' : 'Year ' + normalizedTargetYear}.` },
+        { status: 400 }
+      );
+    }
+    targetStudentIds = students.map((s) => s.id);
+  } else {
+    // Standard mentor cohort
+    const { data: mentorships, error: msError } = await supabase
+      .from('mentorships')
+      .select('mentee_id')
+      .eq('mentor_id', user.id);
+
+    if (msError || !mentorships?.length) {
+      return NextResponse.json(
+        { error: 'No mentees found. Add mentees to your cohort first.' },
+        { status: 400 }
+      );
+    }
+    targetStudentIds = mentorships.map((m) => m.mentee_id);
   }
 
   const todayIST = getTodayIST();
@@ -107,25 +149,45 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Scheduled date cannot be in the past.' }, { status: 400 });
   }
 
-  const maxDateIST = getDateOffsetIST(7);
+  const maxDateIST = getDateOffsetIST(30);
   if (targetDate > maxDateIST) {
-    return NextResponse.json({ error: 'You can only schedule questions up to a week (7 days) in advance.' }, { status: 400 });
+    return NextResponse.json({ error: 'You can only schedule questions up to 1 month (30 days) in advance.' }, { status: 400 });
   }
 
-  // If a future date within a week was requested, route to scheduled_tasks
+  // If a future date within 30 days was requested, route to scheduled_tasks
   if (targetDate > todayIST) {
+    const insertPayload: any = {
+      mentor_id: user.id,
+      platform: parsed.platform,
+      problem_slug_or_id: parsed.problemSlugOrId,
+      scheduled_date: targetDate,
+      status: 'pending',
+    };
 
-    const { data: scheduledTask, error: schedError } = await supabase
+    if (normalizedTargetYear) {
+      insertPayload.target_year = normalizedTargetYear;
+    }
+
+    let { data: scheduledTask, error: schedError } = await supabase
       .from('scheduled_tasks')
-      .insert({
-        mentor_id: user.id,
-        platform: parsed.platform,
-        problem_slug_or_id: parsed.problemSlugOrId,
-        scheduled_date: targetDate,
-        status: 'pending',
-      })
+      .insert(insertPayload)
       .select()
       .single();
+
+    // Fallback: If target_year column does not exist yet in DB schema, encode in problem_slug_or_id
+    if (schedError && normalizedTargetYear && (schedError.code === 'PGRST204' || schedError.message?.includes('target_year'))) {
+      insertPayload.problem_slug_or_id = `${parsed.problemSlugOrId}::year:${normalizedTargetYear}`;
+      delete insertPayload.target_year;
+
+      const retry = await supabase
+        .from('scheduled_tasks')
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      scheduledTask = retry.data;
+      schedError = retry.error;
+    }
 
     if (schedError) {
       return NextResponse.json(
@@ -134,18 +196,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const targetLabel = normalizedTargetYear
+      ? (normalizedTargetYear === 'all' ? 'all students' : `Year ${normalizedTargetYear} students`)
+      : 'your cohort';
+
     return NextResponse.json({
       success: true,
       scheduled: true,
-      message: `Question scheduled for ${targetDate}. It will roll out automatically at 4:00 AM IST!`,
+      message: `Question scheduled for ${targetDate}. It will roll out automatically to ${targetLabel} on that day!`,
       scheduledTask,
     });
   }
 
   // Immediate assignment for today (IST)
-  const taskRows = mentorships.map((m) => ({
+  const taskRows = targetStudentIds.map((studentId) => ({
     assigned_by: user.id,
-    assigned_to: m.mentee_id,
+    assigned_to: studentId,
     platform: parsed.platform,
     problem_slug_or_id: parsed.problemSlugOrId,
     status: 'Pending',

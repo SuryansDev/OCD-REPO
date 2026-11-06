@@ -267,26 +267,60 @@ export async function rollOutScheduledTasks(supabase: any, targetDateIST?: strin
 
     for (const scheduled of pendingScheduled) {
       try {
-        // Fetch all active mentees for this mentor
-        const { data: mentorships, error: msError } = await supabase
-          .from('mentorships')
-          .select('mentee_id')
-          .eq('mentor_id', scheduled.mentor_id);
+        // Support Common Mentor assigning to a whole year (or all years)
+        let targetYear = (scheduled as any).target_year || null;
+        let cleanProblemSlug = scheduled.problem_slug_or_id;
 
-        if (msError) {
-          errors.push(`Mentor ${scheduled.mentor_id}: Failed to fetch mentees (${msError.message})`);
-          continue;
+        // Check for fallback encoded target_year in problem_slug_or_id (e.g. "two-sum::year:2")
+        if (!targetYear && cleanProblemSlug.includes('::year:')) {
+          const parts = cleanProblemSlug.split('::year:');
+          cleanProblemSlug = parts[0];
+          targetYear = parts[1];
         }
 
-        if (mentorships && mentorships.length > 0) {
-          for (const m of mentorships) {
+        let targetStudentIds: string[] = [];
+
+        if (targetYear) {
+          // Fetch all approved non-admin students in that year (or all years)
+          let studentQuery = supabase
+            .from('users')
+            .select('id')
+            .neq('role', 'admin')
+            .eq('approval_status', 'approved');
+
+          if (targetYear !== 'all') {
+            studentQuery = studentQuery.eq('year', targetYear);
+          }
+
+          const { data: students, error: studentError } = await studentQuery;
+          if (studentError) {
+            errors.push(`Scheduled task ${scheduled.id}: Failed to fetch year ${targetYear} students (${studentError.message})`);
+            continue;
+          }
+          targetStudentIds = (students || []).map((s: any) => s.id);
+        } else {
+          // Standard mentor: Fetch all active mentees for this mentor
+          const { data: mentorships, error: msError } = await supabase
+            .from('mentorships')
+            .select('mentee_id')
+            .eq('mentor_id', scheduled.mentor_id);
+
+          if (msError) {
+            errors.push(`Mentor ${scheduled.mentor_id}: Failed to fetch mentees (${msError.message})`);
+            continue;
+          }
+          targetStudentIds = (mentorships || []).map((m: any) => m.mentee_id);
+        }
+
+        if (targetStudentIds.length > 0) {
+          for (const studentId of targetStudentIds) {
             // Check if task already exists to prevent duplicate insertion
             const { data: existing } = await supabase
               .from('tasks')
               .select('id')
-              .eq('assigned_to', m.mentee_id)
+              .eq('assigned_to', studentId)
               .eq('platform', scheduled.platform)
-              .eq('problem_slug_or_id', scheduled.problem_slug_or_id)
+              .eq('problem_slug_or_id', cleanProblemSlug)
               .eq('assigned_date', scheduled.scheduled_date)
               .maybeSingle();
 
@@ -295,15 +329,15 @@ export async function rollOutScheduledTasks(supabase: any, targetDateIST?: strin
                 .from('tasks')
                 .insert({
                   assigned_by: scheduled.mentor_id,
-                  assigned_to: m.mentee_id,
+                  assigned_to: studentId,
                   platform: scheduled.platform,
-                  problem_slug_or_id: scheduled.problem_slug_or_id,
+                  problem_slug_or_id: cleanProblemSlug,
                   status: 'Pending',
                   assigned_date: scheduled.scheduled_date,
                 });
 
               if (insertError) {
-                errors.push(`Mentee ${m.mentee_id}: ${insertError.message}`);
+                errors.push(`Student ${studentId}: ${insertError.message}`);
               } else {
                 totalTasksCreated++;
               }
@@ -617,4 +651,86 @@ export async function executeDailySync(options?: {
     message,
   };
 }
+
+// ─── First User Visit Daily Sync Trigger ──────────────────────────────────────
+declare global {
+  // eslint-disable-next-line no-var
+  var __ocdLastSyncDateIST: string | undefined;
+  // eslint-disable-next-line no-var
+  var __ocdSyncRunning: boolean | undefined;
+}
+
+/**
+ * Checks whether the daily sync has already executed for today (in IST).
+ * Uses an in-memory flag for instantaneous response, falling back to checking
+ * the latest `synced_at` timestamp on `user_stats`.
+ */
+export async function hasDailySyncRunTodayIST(supabase: any, todayIST?: string): Promise<boolean> {
+  const targetDate = todayIST || getTodayIST();
+  if (globalThis.__ocdLastSyncDateIST === targetDate) {
+    return true;
+  }
+  if (globalThis.__ocdSyncRunning) {
+    return true;
+  }
+
+  try {
+    const { data } = await supabase
+      .from('user_stats')
+      .select('synced_at')
+      .not('synced_at', 'is', null)
+      .order('synced_at', { ascending: false })
+      .limit(1);
+
+    if (data && data.length > 0 && data[0].synced_at) {
+      const lastSyncDate = new Date(data[0].synced_at);
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const lastSyncIST = formatter.format(lastSyncDate);
+      if (lastSyncIST === targetDate) {
+        globalThis.__ocdLastSyncDateIST = targetDate;
+        return true;
+      }
+    }
+  } catch (err) {
+    console.error('[SyncEngine] Error checking last sync date:', err);
+  }
+
+  return false;
+}
+
+/**
+ * Automatically triggers the full daily sync in the background whenever
+ * the first user opens the site on that day.
+ * Returns true if the sync was launched, or false if it already ran today.
+ */
+export async function triggerDailySyncIfFirstVisitToday(supabase: any, todayIST?: string): Promise<boolean> {
+  const targetDate = todayIST || getTodayIST();
+  const alreadyRun = await hasDailySyncRunTodayIST(supabase, targetDate);
+  if (alreadyRun) {
+    return false;
+  }
+
+  // Set memory guard to prevent concurrent requests from re-triggering
+  globalThis.__ocdSyncRunning = true;
+  globalThis.__ocdLastSyncDateIST = targetDate;
+
+  console.log(`[AutoRefresh] First user visit of today (${targetDate} IST)! Launching automatic daily sync in background...`);
+
+  // Run in background without blocking the user response
+  executeDailySync({ supabaseClient: supabase, source: 'first_user_visit_of_day', targetDateIST: targetDate })
+    .catch((err) => {
+      console.error('[AutoRefresh] Background daily sync error on first visit:', err);
+    })
+    .finally(() => {
+      globalThis.__ocdSyncRunning = false;
+    });
+
+  return true;
+}
+
 

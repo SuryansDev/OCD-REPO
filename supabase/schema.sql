@@ -7,7 +7,7 @@
 -- ────────────────────────────────────────────────────────────
 CREATE TABLE public.users (
   id               UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  role             TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+  role             TEXT NOT NULL CHECK (role IN ('admin', 'user', 'common_mentor')),
   approval_status  TEXT NOT NULL DEFAULT 'pending' CHECK (approval_status IN ('pending', 'approved', 'rejected')),
   
   full_name        TEXT NOT NULL,

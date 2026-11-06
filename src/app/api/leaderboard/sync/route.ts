@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cleanCodeforcesHandle, cleanLeetCodeHandle } from '@/lib/handles';
 import type { PlatformSyncStatus } from '@/lib/types';
-import { executeDailySync, rollOutScheduledTasks } from '@/lib/syncEngine';
+import { executeDailySync, rollOutScheduledTasks, triggerDailySyncIfFirstVisitToday } from '@/lib/syncEngine';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 function createRouteHandlerClient(request: NextRequest) {
@@ -189,7 +189,14 @@ export async function GET(request: NextRequest) {
     console.error('[Leaderboard API] Rollout check error:', err);
   }
 
-  // 2. Fetch all non-admin users from users table
+  // 2. Automatically trigger daily sync in the background if this is the first user opening the site today
+  try {
+    await triggerDailySyncIfFirstVisitToday(adminClient);
+  } catch (err) {
+    console.error('[Leaderboard API] First visit daily sync trigger error:', err);
+  }
+
+  // 3. Fetch all non-admin users from users table
   const { data: allUsers, error: usersError } = await adminClient
     .from('users')
     .select('id, full_name, email, year, branch, roll_number, cf_handle, lc_handle, role, approval_status, created_at')

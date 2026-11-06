@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Trigger Daily Leaderboard & Task Rollout Sync
         env:
-          APP_URL: ${{ secrets.DEPLOYED_APP_URL || secrets.NEXT_PUBLIC_APP_URL || 'https://ocd-repo.vercel.app' }}
+          APP_URL: ${{ secrets.DEPLOYED_APP_URL  || 'https://ocd-repo.vercel.app' }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           echo "Triggering auto-refresh sync at $APP_URL/api/cron/sync..."

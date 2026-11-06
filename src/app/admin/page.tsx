@@ -429,11 +429,11 @@ Please update your profile settings so your contest ratings and tasks can sync p
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-lg font-bold text-surface-900">Sync Leaderboard &amp; Cohort Tasks</h3>
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" /> Auto-Sync: 4:00 AM IST
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" /> Auto-Sync: Daily on First Visit (IST)
                   </span>
                 </div>
                 <p className="text-xs text-surface-600 mt-1 leading-relaxed">
-                  Automatically runs daily at <strong>4:00 AM IST</strong> to roll out mentors&apos; scheduled questions and sync LeetCode &amp; Codeforces ratings, streaks, solved counts, and privacy status for all students.
+                  Automatically runs daily upon the <strong>first user visit of the day</strong> to roll out mentors&apos; scheduled questions and sync LeetCode &amp; Codeforces ratings, streaks, solved counts, and privacy status for all students.
                 </p>
               </div>
               <div className="mt-4 pt-4 border-t border-emerald-100 flex items-center justify-between">
@@ -664,7 +664,37 @@ Please update your profile settings so your contest ratings and tasks can sync p
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 font-semibold text-brand-600 uppercase text-xs">{u.role}</td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={u.role}
+                            onChange={async (e) => {
+                              const newRole = e.target.value;
+                              if (!confirm(`Change role of ${u.full_name} to ${newRole}?`)) return;
+                              try {
+                                const { error } = await supabase.from('users').update({ role: newRole }).eq('id', u.id);
+                                if (error) {
+                                  alert(`Failed to update role: ${error.message}. Please make sure you have executed supabase/migration_common_mentor_and_target_year.sql in your Supabase SQL Editor.`);
+                                } else {
+                                  setUsers((prev) => prev.map((item) => (item.id === u.id ? { ...item, role: newRole as any } : item)));
+                                  alert(`Successfully updated ${u.full_name}'s role to ${newRole}!`);
+                                }
+                              } catch (err: any) {
+                                alert(`Error: ${err?.message || err}`);
+                              }
+                            }}
+                            className={`text-[11px] font-bold rounded-lg px-2 py-1 uppercase cursor-pointer border transition-all ${
+                              u.role === 'admin'
+                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                : u.role === 'common_mentor'
+                                ? 'bg-purple-100 text-purple-800 border-purple-300 font-black'
+                                : 'bg-surface-50 text-surface-700 border-surface-200'
+                            }`}
+                          >
+                            <option value="user">User</option>
+                            <option value="common_mentor">Common Mentor</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
