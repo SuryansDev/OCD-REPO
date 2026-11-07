@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'common_mentor' | 'user';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
-export type Platform = 'Codeforces' | 'LeetCode' | 'YouTube';
+export type Platform = 'Codeforces' | 'LeetCode' | 'YouTube' | 'CSES';
 export type TaskStatus = 'Pending' | 'Completed';
 export type ScheduledTaskStatus = 'pending' | 'rolled_out' | 'cancelled';
 

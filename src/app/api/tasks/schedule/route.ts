@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   const parsed = parseTaskLink(link);
   if (!parsed) {
     return NextResponse.json(
-      { error: 'Could not parse link. Ensure it is a valid Codeforces, LeetCode, or YouTube link.' },
+      { error: 'Could not parse link. Ensure it is a valid Codeforces, LeetCode, CSES, or YouTube link.' },
       { status: 400 }
     );
   }

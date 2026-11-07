@@ -1,4 +1,5 @@
 import type { Platform } from '@/lib/types';
+import { extractCsesTaskId } from '@/lib/cses';
 
 export interface ParsedTaskLink {
   platform: Platform;
@@ -8,8 +9,20 @@ export interface ParsedTaskLink {
 export function parseTaskLink(link: string): ParsedTaskLink | null {
   if (!link || typeof link !== 'string') return null;
 
+  const trimmed = link.trim();
+
+  // Check CSES shorthand or task ID first (e.g. cses: 1068, cses 1068)
+  const csesId = extractCsesTaskId(trimmed);
+  if (csesId) {
+    return {
+      platform: 'CSES',
+      problemSlugOrId: csesId,
+    };
+  }
+
   try {
-    const url = new URL(link.trim());
+    const normalizedLink = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const url = new URL(normalizedLink);
     if (url.hostname.includes('codeforces.com')) {
       // Match contest / gym: /contest/1800/problem/A or /gym/104000/problem/B
       const contestMatch = link.match(/(?:contest|gym)\/(\d+)\/problem\/([A-Za-z0-9]+)/i);
@@ -61,6 +74,14 @@ export function parseTaskLink(link: string): ParsedTaskLink | null {
         return {
           platform: 'YouTube',
           problemSlugOrId,
+        };
+      }
+    } else if (url.hostname.includes('cses.fi')) {
+      const parsedCsesId = extractCsesTaskId(trimmed);
+      if (parsedCsesId) {
+        return {
+          platform: 'CSES',
+          problemSlugOrId: parsedCsesId,
         };
       }
     }

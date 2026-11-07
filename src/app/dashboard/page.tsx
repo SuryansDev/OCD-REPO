@@ -7,6 +7,8 @@ import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import PlatformBadge from '@/components/PlatformBadge';
 import Confetti from '@/components/Confetti';
+import { toast } from '@/components/Toast';
+import { formatCsesTaskTitle, getCsesTaskUrl } from '@/lib/cses';
 import type { UserProfile, Task, ScheduledTask } from '@/lib/types';
 import {
   Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2,
@@ -37,6 +39,8 @@ const getTaskLink = (task: any) => {
     return `https://codeforces.com/problemset/problem/${cleanId}`;
   } else if (task.platform === 'YouTube') {
     return `https://www.youtube.com/watch?v=${cleanId}`;
+  } else if (task.platform === 'CSES') {
+    return getCsesTaskUrl(cleanId);
   }
   return '#';
 };
@@ -50,6 +54,8 @@ const formatProblemTitle = (slugOrId: string, platform: string) => {
       .join(' ');
   } else if (platform === 'YouTube') {
     return `Video: ${cleanSlug}`;
+  } else if (platform === 'CSES') {
+    return formatCsesTaskTitle(cleanSlug);
   }
   return cleanSlug;
 };
@@ -333,7 +339,7 @@ export default function Dashboard() {
         .eq('id', task.id);
 
       if (error) {
-        alert(`Failed to update task: ${error.message}`);
+        toast.error('Task Update Failed', error.message);
       } else {
         setMyTasks((prev) =>
           prev.map((t) =>
@@ -343,10 +349,13 @@ export default function Dashboard() {
         if (newStatus === 'Completed') {
           setShowConfetti(true);
           setTimeout(() => setShowConfetti(false), 4000);
+          toast.success('Assignment Completed!', 'Great job! Keep up the momentum.');
+        } else {
+          toast.info('Assignment Marked Pending', 'Task has been moved back to pending.');
         }
       }
     } catch (e: any) {
-      alert(`Error updating task: ${e?.message || 'Something went wrong'}`);
+      toast.error('Error Updating Task', e?.message || 'Something went wrong');
     } finally {
       setTogglingTaskId(null);
     }
@@ -363,12 +372,12 @@ export default function Dashboard() {
         setShowConfetti(true);
         fetchData();
         setTimeout(() => setShowConfetti(false), 5000);
-        alert(data.message);
+        toast.success('Submissions Verified!', data.message);
       } else {
-        alert(data.message || 'No new verified submissions found.');
+        toast.info('Verification Status', data.message || 'No new verified submissions found.');
       }
     } catch (e) {
-      alert('Verification sync failed. Try again.');
+      toast.error('Verification Failed', 'Verification sync failed. Please try again.');
     }
     setSyncing(false);
   };
@@ -378,7 +387,7 @@ export default function Dashboard() {
     if (!taskLink) return;
     if (!isCommonMentorOrAdmin && myMentees.length === 0) return;
     if (isCommonMentorOrAdmin && !targetYear && myMentees.length === 0) {
-      alert('Please select a target year of students to assign questions to.');
+      toast.warning('Target Year Required', 'Please select a target year of students to assign questions to.');
       return;
     }
 
@@ -409,12 +418,12 @@ export default function Dashboard() {
         setTaskLink('');
         setSelectedScheduleDate(getTodayIST());
         await fetchData();
-        alert(data.message || 'Task processed successfully!');
+        toast.success('Task Assigned!', data.message || 'Task processed successfully!');
       } else {
-        alert(data.error || 'Failed to assign or schedule task');
+        toast.error('Assignment Failed', data.error || 'Failed to assign or schedule task');
       }
     } catch (e) {
-      alert('Network error.');
+      toast.error('Network Error', 'Failed to connect to the server. Please try again.');
     }
     setAssigning(false);
   };
@@ -430,11 +439,12 @@ export default function Dashboard() {
       const data = await res.json();
       if (res.ok) {
         setScheduledTasks((prev) => prev.filter((t) => t.id !== id));
+        toast.info('Scheduled Task Cancelled', 'The scheduled question was cancelled.');
       } else {
-        alert(data.error || 'Failed to cancel scheduled task');
+        toast.error('Failed to Cancel', data.error || 'Failed to cancel scheduled task');
       }
     } catch {
-      alert('Network error.');
+      toast.error('Network Error', 'Failed to connect to the server. Please try again.');
     }
     setDeletingScheduledId(null);
   };
@@ -443,7 +453,7 @@ export default function Dashboard() {
     e.preventDefault();
     if (!selectedMentorId) return;
     if (!profile) {
-      alert('Your profile is still loading. Please try again.');
+      toast.info('Profile Loading', 'Your profile is still loading. Please try again in a moment.');
       return;
     }
     setRequesting(true);
@@ -457,17 +467,17 @@ export default function Dashboard() {
         .maybeSingle();
 
       if (lookupError) {
-        alert(`Failed to check existing request: ${lookupError.message}`);
+        toast.error('Request Check Failed', lookupError.message);
         return;
       }
 
       if (existingRequest?.status === 'pending') {
-        alert('You already have a pending request with this mentor.');
+        toast.warning('Request Pending', 'You already have a pending request with this mentor.');
         return;
       }
 
       if (existingRequest?.status === 'approved') {
-        alert('This mentor has already accepted your request.');
+        toast.info('Already Connected', 'This mentor has already accepted your request.');
         return;
       }
 
@@ -481,13 +491,14 @@ export default function Dashboard() {
             .insert({ mentor_id: selectedMentorId, mentee_id: profile.id, status: 'pending' });
 
       if (result.error) {
-        alert(`Failed to send request: ${result.error.message}`);
+        toast.error('Failed to Send Request', result.error.message);
       } else {
         setSelectedMentorId('');
         await fetchData();
+        toast.success('Request Sent!', 'Your mentorship request was sent to the mentor.');
       }
     } catch (error: any) {
-      alert(`Failed to send request: ${error?.message || 'Please try again.'}`);
+      toast.error('Failed to Send Request', error?.message || 'Please try again.');
     } finally {
       setRequesting(false);
     }
@@ -508,7 +519,7 @@ export default function Dashboard() {
         .select();
 
       if (insertError) {
-        alert(`Could not accept request: ${insertError.message}`);
+        toast.error('Could Not Accept Request', insertError.message);
         setRequestActionLoadingId(null);
         return;
       }
@@ -525,8 +536,9 @@ export default function Dashboard() {
 
       setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
       await fetchData();
+      toast.success('Mentee Accepted!', `${menteeName} is now in your cohort.`);
     } catch (err: any) {
-      alert(`Error accepting request: ${err?.message || 'Something went wrong'}`);
+      toast.error('Error Accepting Request', err?.message || 'Something went wrong');
     } finally {
       setRequestActionLoadingId(null);
     }
@@ -543,13 +555,14 @@ export default function Dashboard() {
         .eq('id', requestId);
 
       if (error) {
-        alert(`Could not decline request: ${error.message}`);
+        toast.error('Could Not Decline Request', error.message);
       } else {
         setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
         await fetchData();
+        toast.info('Request Declined', `Mentorship request from ${menteeName} was declined.`);
       }
     } catch (err: any) {
-      alert(`Error: ${err?.message || 'Something went wrong'}`);
+      toast.error('Error Declining Request', err?.message || 'Something went wrong');
     } finally {
       setRequestActionLoadingId(null);
     }
@@ -566,13 +579,14 @@ export default function Dashboard() {
         .eq('id', requestId);
 
       if (error) {
-        alert(`Could not cancel request: ${error.message}`);
+        toast.error('Could Not Cancel Request', error.message);
       } else {
         setPendingRequests(prev => prev.filter(r => r.id !== requestId));
         await fetchData();
+        toast.info('Request Cancelled', 'Mentorship request was successfully cancelled.');
       }
     } catch (err: any) {
-      alert(`Error: ${err?.message || 'Something went wrong'}`);
+      toast.error('Error Cancelling Request', err?.message || 'Something went wrong');
     } finally {
       setRequestActionLoadingId(null);
     }
@@ -595,12 +609,15 @@ export default function Dashboard() {
       .select();
 
     if (error) {
-      alert(`Failed to remove mentee: ${error.message}`);
+      toast.error('Failed to Remove Mentee', error.message);
       return;
     }
 
     if (!deleted || deleted.length === 0) {
-      alert('Could not remove mentee: Permission denied by database. Please run supabase/fix_mentorship_rls.sql in your Supabase SQL Editor.');
+      toast.error(
+        'Permission Denied',
+        'Could not remove mentee: Permission denied by database. Please run supabase/fix_mentorship_rls.sql in your Supabase SQL Editor.'
+      );
       return;
     }
 
@@ -614,6 +631,7 @@ export default function Dashboard() {
     // 3. Update local state & refetch cohort tasks
     setMyMentees(prev => prev.filter(m => m.id !== menteeId));
     fetchData();
+    toast.success('Mentee Removed', `${menteeName} was removed from your cohort.`);
   };
 
   // Sort tasks: newest problem at the top
@@ -1057,7 +1075,7 @@ export default function Dashboard() {
                         <tr key={task.id} className="hover:bg-surface-50/80 transition-colors group">
                           {/* Solved / Unsolved Icon / Checkbox */}
                           <td className="py-3 px-3 text-center">
-                            {task.platform === 'YouTube' ? (
+                            {task.platform === 'YouTube' || task.platform === 'CSES' ? (
                               <button
                                 onClick={() => handleToggleSelfCheck(task)}
                                 disabled={togglingTaskId === task.id}
@@ -1103,6 +1121,10 @@ export default function Dashboard() {
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200/80">
                                 <Video className="w-3 h-3 text-red-600" /> YT
                               </span>
+                            ) : task.platform === 'CSES' ? (
+                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/80">
+                                CSES
+                              </span>
                             ) : (
                               <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80">
                                 CF
@@ -1117,7 +1139,7 @@ export default function Dashboard() {
 
                           {/* State Pill / Self-Check Action */}
                           <td className="py-3 px-4 text-right whitespace-nowrap">
-                            {task.platform === 'YouTube' ? (
+                            {task.platform === 'YouTube' || task.platform === 'CSES' ? (
                               <button
                                 onClick={() => handleToggleSelfCheck(task)}
                                 disabled={togglingTaskId === task.id}
@@ -2004,8 +2026,8 @@ export default function Dashboard() {
                   <div className="relative">
                     <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
                     <input
-                      type="url"
-                      placeholder="https://leetcode.com/problems/... or https://codeforces.com/... or https://youtu.be/..."
+                      type="text"
+                      placeholder="https://leetcode.com/... or https://cses.fi/problemset/task/1068 or youtu.be/..."
                       value={taskLink}
                       onChange={(e) => setTaskLink(e.target.value)}
                       className="input-field pl-10 bg-white"

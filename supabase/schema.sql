@@ -54,7 +54,7 @@ CREATE TABLE public.tasks (
   id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   assigned_by         UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   assigned_to         UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  platform            TEXT NOT NULL CHECK (platform IN ('Codeforces', 'LeetCode')),
+  platform            TEXT NOT NULL CHECK (platform IN ('Codeforces', 'LeetCode', 'YouTube', 'CSES')),
   problem_slug_or_id  TEXT NOT NULL,
   status              TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Completed')),
   assigned_date       DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -177,7 +177,7 @@ CREATE TRIGGER on_auth_user_created
 CREATE TABLE IF NOT EXISTS public.scheduled_tasks (
   id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   mentor_id           UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  platform            TEXT NOT NULL CHECK (platform IN ('Codeforces', 'LeetCode', 'YouTube')),
+  platform            TEXT NOT NULL CHECK (platform IN ('Codeforces', 'LeetCode', 'YouTube', 'CSES')),
   problem_slug_or_id  TEXT NOT NULL,
   scheduled_date      DATE NOT NULL,
   status              TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'rolled_out', 'cancelled')),

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import { toast } from '@/components/Toast';
 import type { UserProfile } from '@/lib/types';
 import { 
   cleanCodeforcesHandle, cleanLeetCodeHandle, 
@@ -83,8 +84,10 @@ function ProfileContent() {
 
     if (error) {
       setSaveError('Failed to save changes. Please try again.');
+      toast.error('Save Failed', 'Failed to save changes. Please try again.');
     } else {
       setSaveSuccess(true);
+      toast.success('Profile Saved', 'Your coding handles and profile details have been saved.');
       setLcHandle(cleanedLc || '');
       setCfHandle(cleanedCf || '');
       setContactNumber(cleanedContact || '');

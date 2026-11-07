@@ -200,6 +200,15 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const hasManualTasks = pendingTasks.some(t => t.platform === 'CSES' || t.platform === 'YouTube');
+
+  if (!hasLC && !hasCF && hasManualTasks) {
+    return NextResponse.json({
+      verifiedCount: 0,
+      message: 'All your pending assignments are manual self-check tasks (CSES / YouTube). You can mark them completed directly from the assignment table!',
+    });
+  }
+
   let advice = 'Could not verify any new submissions. Keep solving!';
   if (hasLC && !cleanLeetCodeHandle(profile.lc_handle)) {
     advice += ' Note: You have pending LeetCode tasks, but your LeetCode handle is not set in your profile.';
@@ -207,6 +216,9 @@ export async function POST(request: NextRequest) {
     advice += ' Note: You have pending Codeforces tasks, but your Codeforces handle is not set in your profile.';
   } else if (hasLC) {
     advice += ' (Tip: If you recently solved on LeetCode, please ensure your profile & submission history are set to Public in LeetCode account privacy settings.)';
+  }
+  if (hasManualTasks) {
+    advice += ' Note: CSES and YouTube assignments can be self-checked directly in your table.';
   }
 
   return NextResponse.json({
