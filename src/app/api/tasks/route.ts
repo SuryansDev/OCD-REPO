@@ -168,7 +168,8 @@ export async function POST(request: NextRequest) {
       insertPayload.target_year = normalizedTargetYear;
     }
 
-    let { data: scheduledTask, error: schedError } = await supabase
+    const adminClient = createAdminSupabaseClient();
+    let { data: scheduledTask, error: schedError } = await adminClient
       .from('scheduled_tasks')
       .insert(insertPayload)
       .select()
@@ -179,7 +180,7 @@ export async function POST(request: NextRequest) {
       insertPayload.problem_slug_or_id = `${parsed.problemSlugOrId}::year:${normalizedTargetYear}`;
       delete insertPayload.target_year;
 
-      const retry = await supabase
+      const retry = await adminClient
         .from('scheduled_tasks')
         .insert(insertPayload)
         .select()
@@ -218,7 +219,8 @@ export async function POST(request: NextRequest) {
     assigned_date: todayIST,
   }));
 
-  const { data: tasks, error: insertError } = await supabase
+  const adminClient = createAdminSupabaseClient();
+  const { data: tasks, error: insertError } = await adminClient
     .from('tasks')
     .insert(taskRows)
     .select();

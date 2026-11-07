@@ -12,3 +12,17 @@ ALTER TABLE public.scheduled_tasks ADD COLUMN IF NOT EXISTS target_year TEXT;
 
 -- 3. Create index on target_year for fast query during daily rollout
 CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_target_year ON public.scheduled_tasks (target_year);
+
+-- 4. Update RLS policies on tasks so Common Mentors and Admins can create and view tasks for any student
+DROP POLICY IF EXISTS "Mentors can create tasks" ON public.tasks;
+CREATE POLICY "Mentors can create tasks" ON public.tasks FOR INSERT WITH CHECK (
+  assigned_by = auth.uid() AND (
+    EXISTS (SELECT 1 FROM public.mentorships WHERE mentor_id = auth.uid() AND mentee_id = tasks.assigned_to)
+    OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('common_mentor', 'admin'))
+  )
+);
+
+DROP POLICY IF EXISTS "Mentors can view assigned tasks" ON public.tasks;
+CREATE POLICY "Mentors can view assigned tasks" ON public.tasks FOR SELECT USING (
+  assigned_by = auth.uid() OR public.is_admin() OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'common_mentor')
+);

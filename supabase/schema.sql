@@ -108,9 +108,14 @@ CREATE POLICY "Users or Admins can delete mentorship requests" ON public.mentors
 -- ── TASKS ───────────────────────────────────────────────────
 CREATE POLICY "Admins can view all tasks" ON public.tasks FOR SELECT USING (public.is_admin());
 CREATE POLICY "Mentees can view own tasks" ON public.tasks FOR SELECT USING (assigned_to = auth.uid());
-CREATE POLICY "Mentors can view assigned tasks" ON public.tasks FOR SELECT USING (assigned_by = auth.uid());
+CREATE POLICY "Mentors can view assigned tasks" ON public.tasks FOR SELECT USING (
+  assigned_by = auth.uid() OR public.is_admin() OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'common_mentor')
+);
 CREATE POLICY "Mentors can create tasks" ON public.tasks FOR INSERT WITH CHECK (
-  assigned_by = auth.uid() AND EXISTS (SELECT 1 FROM public.mentorships WHERE mentor_id = auth.uid() AND mentee_id = tasks.assigned_to)
+  assigned_by = auth.uid() AND (
+    EXISTS (SELECT 1 FROM public.mentorships WHERE mentor_id = auth.uid() AND mentee_id = tasks.assigned_to)
+    OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('common_mentor', 'admin'))
+  )
 );
 CREATE POLICY "Mentees can update own task status" ON public.tasks FOR UPDATE USING (assigned_to = auth.uid()) WITH CHECK (assigned_to = auth.uid());
 
