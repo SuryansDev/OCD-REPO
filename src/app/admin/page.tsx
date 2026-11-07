@@ -426,13 +426,18 @@ Please update your profile settings so your contest ratings and tasks can sync p
             {/* Sync Leaderboard */}
             <div className="card overflow-hidden p-6 border-emerald-200 border-2 bg-emerald-50/30 flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-bold text-surface-900">Sync Leaderboard Rankings</h3>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-lg font-bold text-surface-900">Sync Leaderboard &amp; Cohort Tasks</h3>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" /> Auto-Sync: Daily on First Visit (IST)
+                  </span>
+                </div>
                 <p className="text-xs text-surface-600 mt-1 leading-relaxed">
-                  Pulls the latest LeetCode &amp; Codeforces stats, contest history, solved counts, streaks, and platform privacy status for all approved students.
+                  Automatically runs daily upon the <strong>first user visit of the day</strong> to roll out mentors&apos; scheduled questions and sync LeetCode &amp; Codeforces ratings, streaks, solved counts, and privacy status for all students.
                 </p>
               </div>
               <div className="mt-4 pt-4 border-t border-emerald-100 flex items-center justify-between">
-                <span className="text-xs text-emerald-800 font-medium">Runs diagnostics automatically</span>
+                <span className="text-xs text-emerald-800 font-medium">Manual on-demand sync</span>
                 <button 
                   onClick={async () => {
                     if (!confirm('This will fetch stats from LeetCode & Codeforces for all users. It may take a minute.')) return;
@@ -659,7 +664,37 @@ Please update your profile settings so your contest ratings and tasks can sync p
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 font-semibold text-brand-600 uppercase text-xs">{u.role}</td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={u.role}
+                            onChange={async (e) => {
+                              const newRole = e.target.value;
+                              if (!confirm(`Change role of ${u.full_name} to ${newRole}?`)) return;
+                              try {
+                                const { error } = await supabase.from('users').update({ role: newRole }).eq('id', u.id);
+                                if (error) {
+                                  alert(`Failed to update role: ${error.message}. Please make sure you have executed supabase/migration_common_mentor_and_target_year.sql in your Supabase SQL Editor.`);
+                                } else {
+                                  setUsers((prev) => prev.map((item) => (item.id === u.id ? { ...item, role: newRole as any } : item)));
+                                  alert(`Successfully updated ${u.full_name}'s role to ${newRole}!`);
+                                }
+                              } catch (err: any) {
+                                alert(`Error: ${err?.message || err}`);
+                              }
+                            }}
+                            className={`text-[11px] font-bold rounded-lg px-2 py-1 uppercase cursor-pointer border transition-all ${
+                              u.role === 'admin'
+                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                : u.role === 'common_mentor'
+                                ? 'bg-purple-100 text-purple-800 border-purple-300 font-black'
+                                : 'bg-surface-50 text-surface-700 border-surface-200'
+                            }`}
+                          >
+                            <option value="user">User</option>
+                            <option value="common_mentor">Common Mentor</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button

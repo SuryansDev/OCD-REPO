@@ -7,7 +7,7 @@
 -- ────────────────────────────────────────────────────────────
 CREATE TABLE public.users (
   id               UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  role             TEXT NOT NULL CHECK (role IN ('admin', 'user')),
+  role             TEXT NOT NULL CHECK (role IN ('admin', 'user', 'common_mentor')),
   approval_status  TEXT NOT NULL DEFAULT 'pending' CHECK (approval_status IN ('pending', 'approved', 'rejected')),
   
   full_name        TEXT NOT NULL,
@@ -108,9 +108,14 @@ CREATE POLICY "Users or Admins can delete mentorship requests" ON public.mentors
 -- ── TASKS ───────────────────────────────────────────────────
 CREATE POLICY "Admins can view all tasks" ON public.tasks FOR SELECT USING (public.is_admin());
 CREATE POLICY "Mentees can view own tasks" ON public.tasks FOR SELECT USING (assigned_to = auth.uid());
-CREATE POLICY "Mentors can view assigned tasks" ON public.tasks FOR SELECT USING (assigned_by = auth.uid());
+CREATE POLICY "Mentors can view assigned tasks" ON public.tasks FOR SELECT USING (
+  assigned_by = auth.uid() OR public.is_admin() OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'common_mentor')
+);
 CREATE POLICY "Mentors can create tasks" ON public.tasks FOR INSERT WITH CHECK (
-  assigned_by = auth.uid() AND EXISTS (SELECT 1 FROM public.mentorships WHERE mentor_id = auth.uid() AND mentee_id = tasks.assigned_to)
+  assigned_by = auth.uid() AND (
+    EXISTS (SELECT 1 FROM public.mentorships WHERE mentor_id = auth.uid() AND mentee_id = tasks.assigned_to)
+    OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('common_mentor', 'admin'))
+  )
 );
 CREATE POLICY "Mentees can update own task status" ON public.tasks FOR UPDATE USING (assigned_to = auth.uid()) WITH CHECK (assigned_to = auth.uid());
 
@@ -164,3 +169,39 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+
+-- ────────────────────────────────────────────────────────────
+-- 5. SCHEDULED TASKS TABLE (Weekly Scheduling & Auto-Refresh)
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.scheduled_tasks (
+  id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  mentor_id           UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  platform            TEXT NOT NULL CHECK (platform IN ('Codeforces', 'LeetCode', 'YouTube')),
+  problem_slug_or_id  TEXT NOT NULL,
+  scheduled_date      DATE NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'rolled_out', 'cancelled')),
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  rolled_out_at       TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_date_status ON public.scheduled_tasks (scheduled_date, status);
+CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_mentor ON public.scheduled_tasks (mentor_id);
+
+ALTER TABLE public.scheduled_tasks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Mentors can view own scheduled tasks" 
+  ON public.scheduled_tasks FOR SELECT 
+  USING (mentor_id = auth.uid() OR public.is_admin());
+
+CREATE POLICY "Mentors can insert own scheduled tasks" 
+  ON public.scheduled_tasks FOR INSERT 
+  WITH CHECK (mentor_id = auth.uid() OR public.is_admin());
+
+CREATE POLICY "Mentors can update own scheduled tasks" 
+  ON public.scheduled_tasks FOR UPDATE 
+  USING (mentor_id = auth.uid() OR public.is_admin());
+
+CREATE POLICY "Mentors can delete own scheduled tasks" 
+  ON public.scheduled_tasks FOR DELETE 
+  USING (mentor_id = auth.uid() OR public.is_admin());

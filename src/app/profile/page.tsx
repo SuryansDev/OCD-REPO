@@ -150,9 +150,11 @@ function ProfileContent() {
                 <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
                   profile?.role === 'admin' 
                     ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+                    : profile?.role === 'common_mentor'
+                    ? 'bg-purple-100 text-purple-700 border border-purple-200'
                     : 'bg-brand-50 text-brand-700 border border-brand-200'
                 }`}>
-                  {profile?.role}
+                  {profile?.role === 'common_mentor' ? 'Common Mentor' : profile?.role}
                 </span>
                 <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
                   profile?.approval_status === 'approved'
