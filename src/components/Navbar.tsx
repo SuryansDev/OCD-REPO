@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Code2, LogOut } from 'lucide-react';
 import type { UserRole } from '@/lib/types';
 
@@ -32,7 +33,7 @@ export default function Navbar({ fullName, role }: NavbarProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center gap-3">
+          <Link href="/dashboard" className="flex items-center gap-3 cursor-pointer">
             <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-md shadow-brand-500/20">
               <Code2 className="w-5 h-5 text-white" />
             </div>
@@ -42,7 +43,7 @@ export default function Navbar({ fullName, role }: NavbarProps) {
                 {roleLabel}
               </span>
             </div>
-          </div>
+          </Link>
 
           {/* Right side */}
           <div className="flex items-center gap-4">
