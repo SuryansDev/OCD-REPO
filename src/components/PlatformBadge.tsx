@@ -22,12 +22,14 @@ export default function PlatformBadge({ platform, size = 'md', className }: Plat
           ? 'platform-cf shadow-blue-500/25'
           : platform === 'YouTube'
           ? 'bg-red-600 shadow-red-500/25'
+          : platform === 'CSES'
+          ? 'bg-teal-600 shadow-teal-500/25'
           : 'platform-lc shadow-amber-400/25',
         sizeClasses[size],
         className
       )}
     >
-      {platform === 'Codeforces' ? 'CF' : platform === 'YouTube' ? 'YT' : 'LC'}
+      {platform === 'Codeforces' ? 'CF' : platform === 'YouTube' ? 'YT' : platform === 'CSES' ? 'CSES' : 'LC'}
     </div>
   );
 }

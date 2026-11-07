@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import { toast } from '@/components/Toast';
 import type { UserProfile, ApprovalStatus, UserStats } from '@/lib/types';
 import { 
   cleanCodeforcesHandle, cleanLeetCodeHandle, 
@@ -64,10 +65,18 @@ export default function AdminDashboard() {
   }, [fetchData]);
 
   const handleApproval = async (id: string, status: ApprovalStatus) => {
-    await supabase.from('users').update({ approval_status: status }).eq('id', id);
+    const { error } = await supabase.from('users').update({ approval_status: status }).eq('id', id);
+    if (error) {
+      toast.error('Update Failed', error.message);
+      return;
+    }
     if (status !== 'approved') {
       await supabase.from('user_stats').delete().eq('user_id', id);
     }
+    toast.success(
+      status === 'approved' ? 'User Approved' : status === 'rejected' ? 'User Rejected' : 'Status Updated',
+      `Account status successfully set to ${status}.`
+    );
     fetchData();
   };
 
@@ -447,12 +456,15 @@ Please update your profile settings so your contest ratings and tasks can sync p
                       const data = await res.json();
                       await fetchData();
                       if (data.issues && data.issues.length > 0) {
-                        alert(`${data.message}\n\nNotice: ${data.issues.length} profile(s) could not sync completely. Check the "Coding Profiles Requiring Attention" section above.`);
+                        toast.warning(
+                          'Sync Completed with Notices',
+                          `${data.message}\n\nNotice: ${data.issues.length} profile(s) could not sync completely. Check the "Coding Profiles Requiring Attention" section above.`
+                        );
                       } else {
-                        alert(data.message || 'Sync complete!');
+                        toast.success('Sync Complete!', data.message || 'All user profiles and stats are up to date.');
                       }
                     } catch {
-                      alert('Sync failed.');
+                      toast.error('Sync Failed', 'Failed to synchronize rankings. Please check your network connection.');
                     }
                     setSyncingRankings(false);
                   }}
@@ -512,9 +524,12 @@ Please update your profile settings so your contest ratings and tasks can sync p
                         supabase.from('users').update({ year: u.year, just_promoted: true }).eq('id', u.id)
                       ));
                       await fetchData();
-                      alert(`Successfully progressed ${updates.length} students to their next academic year!`);
+                      toast.success(
+                        'Progression Completed',
+                        `Successfully progressed ${updates.length} students to their next academic year!`
+                      );
                     } else {
-                      alert('No users need progression.');
+                      toast.info('No Progression Needed', 'All active students are already in their appropriate academic year.');
                     }
                   }}
                   className="btn-primary whitespace-nowrap bg-amber-500 hover:bg-amber-600 shadow-amber-500/20 text-xs py-2"
@@ -673,13 +688,16 @@ Please update your profile settings so your contest ratings and tasks can sync p
                               try {
                                 const { error } = await supabase.from('users').update({ role: newRole }).eq('id', u.id);
                                 if (error) {
-                                  alert(`Failed to update role: ${error.message}. Please make sure you have executed supabase/migration_common_mentor_and_target_year.sql in your Supabase SQL Editor.`);
+                                  toast.error(
+                                    'Failed to Update Role',
+                                    `${error.message}. Please make sure you have executed supabase/migration_common_mentor_and_target_year.sql in your Supabase SQL Editor.`
+                                  );
                                 } else {
                                   setUsers((prev) => prev.map((item) => (item.id === u.id ? { ...item, role: newRole as any } : item)));
-                                  alert(`Successfully updated ${u.full_name}'s role to ${newRole}!`);
+                                  toast.success('Role Updated', `Successfully updated ${u.full_name}'s role to ${newRole}!`);
                                 }
                               } catch (err: any) {
-                                alert(`Error: ${err?.message || err}`);
+                                toast.error('Error Updating Role', err?.message || String(err));
                               }
                             }}
                             className={`text-[11px] font-bold rounded-lg px-2 py-1 uppercase cursor-pointer border transition-all ${
