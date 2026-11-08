@@ -1,0 +1,316 @@
+{
+ "v": 1,
+ "at": "2026-11-07T13:00:16.476Z",
+ "scope": "app",
+ "summary": {
+  "fails": 92,
+  "reflex": 2,
+  "warns": 21
+ },
+ "files": {
+  "src/app/admin/page.tsx": {
+   "handlers": [
+    "onChange={(e) => setSearchQuery(e.target.value)}",
+    "onClick={() => fetchData()}",
+    "onClick={() => handleApproval(u.id, 'approved')}",
+    "onClick={() => handleApproval(u.id, 'rejected')}",
+    "onClick={() => handleCopyNotice(u, lcHasIssue ? lcReason : null, cfHasIssue ? cfReason : null)}",
+    "onClick={() => router.push(`/profile?id=${u.id}`)}",
+    "onClick={() => setUserFilter('active')}",
+    "onClick={() => setUserFilter('all')}",
+    "onClick={() => setUserFilter('deactivated')}",
+    "onClick={() => setUserFilter('issues')}",
+    "onClick={() => { if (confirm(`Deactivate ${u.full_name}? They will lose access to the dashboard.`)) { handleApproval(u.id, 'rejected'); } }}",
+    "onClick={() => { if (confirm(`Reactivate ${u.full_name}? They will regain access to the dashboard.`)) { handleApproval(u.id, 'approved'); } }}"
+   ],
+   "links": [
+    "{cfUrl}",
+    "{lcUrl}"
+   ],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "src/app/dashboard/page.tsx": {
+   "handlers": [
+    "onChange={(e) => setLeaderboardPage(Number(e.target.value))}",
+    "onChange={(e) => setTaskLink(e.target.value)}",
+    "onChange={(e) => setTaskPage(Number(e.target.value))}",
+    "onChange={(e) => { setSelectedCFContest(e.target.value); setLeaderboardPage(1); }}",
+    "onChange={(e) => { setSelectedLCContest(e.target.value); setLeaderboardPage(1); }}",
+    "onChange={e => setSelectedMentorId(e.target.value)}",
+    "onClick={() => handleAcceptMenteeRequest(req.id, req.mentee_id, m?.full_name || 'student')}",
+    "onClick={() => handleCancelMyRequest(r.id)}",
+    "onClick={() => handleDeclineMenteeRequest(req.id, m?.full_name || 'student')}",
+    "onClick={() => handleTabChange(tab.key)}",
+    "onClick={() => handleToggleSelfCheck(task)}",
+    "onClick={() => handleYearFilterChange(f.key)}",
+    "onClick={() => setLeaderboardPage(p => Math.max(1, p - 1))}",
+    "onClick={() => setLeaderboardPage(p => Math.min(totalLeaderboardPages, p + 1))}",
+    "onClick={() => setSelectedMentee(m)}",
+    "onClick={() => setSelectedMentee(null)}",
+    "onClick={() => setSelectedTaskGroup(group)}",
+    "onClick={() => setSelectedTaskGroup(null)}",
+    "onClick={() => setTaskPage(p => Math.max(1, p - 1))}",
+    "onClick={() => setTaskPage(p => Math.min(totalTaskPages, p + 1))}",
+    "onClick={(e) => e.stopPropagation()}",
+    "onClick={(e) => { e.stopPropagation(); handleRemoveMentee(m.id, m.full_name); }}",
+    "onClick={handleAcknowledgePromotion}",
+    "onClick={handleSyncProgress}",
+    "onSubmit={handleAssignTask}",
+    "onSubmit={handleRequestMentor}"
+   ],
+   "links": [
+    "#incoming-requests",
+    "{`/profile?id=${entry.user_id}`}",
+    "{`/profile?id=${m?.id}`}",
+    "{`/profile?id=${myEntry.user_id}`}",
+    "{cfUrl}",
+    "{getTaskLink(group)}",
+    "{getTaskLink(selectedTaskGroup)}",
+    "{getTaskLink(task)}",
+    "{lcUrl}"
+   ],
+   "fields": [],
+   "hooks": [],
+   "ids": [
+    "incoming-requests"
+   ],
+   "scripts": []
+  },
+  "src/app/layout.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "src/app/page.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "src/app/login/page.tsx": {
+   "handlers": [
+    "onChange={(e) => setEmail(e.target.value)}",
+    "onChange={(e) => setPassword(e.target.value)}",
+    "onClick={() => setShowPassword(!showPassword)}",
+    "onClick={handleGoogleLogin}",
+    "onSubmit={handleLogin}"
+   ],
+   "links": [
+    "/admin",
+    "/dashboard",
+    "/onboarding",
+    "/pending",
+    "/signup"
+   ],
+   "fields": [],
+   "hooks": [],
+   "ids": [
+    "email",
+    "password"
+   ],
+   "scripts": []
+  },
+  "src/app/onboarding/page.tsx": {
+   "handlers": [
+    "onChange={handleChange}",
+    "onClick={handleSignOut}",
+    "onSubmit={handleSubmit}"
+   ],
+   "links": [],
+   "fields": [
+    "branch",
+    "cf_handle",
+    "contact_number",
+    "lc_handle",
+    "roll_number",
+    "year"
+   ],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "src/app/pending/page.tsx": {
+   "handlers": [
+    "onClick={handleLogout}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "src/app/profile/page.tsx": {
+   "handlers": [
+    "onChange={(e) => setCfHandle(e.target.value)}",
+    "onChange={(e) => setContactNumber(e.target.value)}",
+    "onChange={(e) => setLcHandle(e.target.value)}",
+    "onClick={() => router.push(currentUser?.role === 'admin' ? '/admin' : '/dashboard')}",
+    "onClick={handleSave}"
+   ],
+   "links": [
+    "{getCodeforcesProfileUrl(cfHandle || profile?.cf_handle)!}",
+    "{getLeetCodeProfileUrl(lcHandle || profile?.lc_handle)!}"
+   ],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "src/app/signup/page.tsx": {
+   "handlers": [
+    "onChange={handleChange}",
+    "onClick={handleGoogleSignup}",
+    "onSubmit={handleSignup}"
+   ],
+   "links": [
+    "/login"
+   ],
+   "fields": [
+    "branch",
+    "cf_handle",
+    "contact_number",
+    "email",
+    "full_name",
+    "lc_handle",
+    "password",
+    "roll_number",
+    "year"
+   ],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "src/components/Confetti.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "src/components/Navbar.tsx": {
+   "handlers": [
+    "onClick={() => router.push('/profile')}",
+    "onClick={handleLogout}"
+   ],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  },
+  "src/components/PlatformBadge.tsx": {
+   "handlers": [],
+   "links": [],
+   "fields": [],
+   "hooks": [],
+   "ids": [],
+   "scripts": []
+  }
+ },
+ "wiring": {
+  "handlers": [
+   "onChange={(e) => setCfHandle(e.target.value)}",
+   "onChange={(e) => setContactNumber(e.target.value)}",
+   "onChange={(e) => setEmail(e.target.value)}",
+   "onChange={(e) => setLcHandle(e.target.value)}",
+   "onChange={(e) => setLeaderboardPage(Number(e.target.value))}",
+   "onChange={(e) => setPassword(e.target.value)}",
+   "onChange={(e) => setSearchQuery(e.target.value)}",
+   "onChange={(e) => setTaskLink(e.target.value)}",
+   "onChange={(e) => setTaskPage(Number(e.target.value))}",
+   "onChange={(e) => { setSelectedCFContest(e.target.value); setLeaderboardPage(1); }}",
+   "onChange={(e) => { setSelectedLCContest(e.target.value); setLeaderboardPage(1); }}",
+   "onChange={e => setSelectedMentorId(e.target.value)}",
+   "onChange={handleChange}",
+   "onClick={() => fetchData()}",
+   "onClick={() => handleAcceptMenteeRequest(req.id, req.mentee_id, m?.full_name || 'student')}",
+   "onClick={() => handleApproval(u.id, 'approved')}",
+   "onClick={() => handleApproval(u.id, 'rejected')}",
+   "onClick={() => handleCancelMyRequest(r.id)}",
+   "onClick={() => handleCopyNotice(u, lcHasIssue ? lcReason : null, cfHasIssue ? cfReason : null)}",
+   "onClick={() => handleDeclineMenteeRequest(req.id, m?.full_name || 'student')}",
+   "onClick={() => handleTabChange(tab.key)}",
+   "onClick={() => handleToggleSelfCheck(task)}",
+   "onClick={() => handleYearFilterChange(f.key)}",
+   "onClick={() => router.push('/profile')}",
+   "onClick={() => router.push(`/profile?id=${u.id}`)}",
+   "onClick={() => router.push(currentUser?.role === 'admin' ? '/admin' : '/dashboard')}",
+   "onClick={() => setLeaderboardPage(p => Math.max(1, p - 1))}",
+   "onClick={() => setLeaderboardPage(p => Math.min(totalLeaderboardPages, p + 1))}",
+   "onClick={() => setSelectedMentee(m)}",
+   "onClick={() => setSelectedMentee(null)}",
+   "onClick={() => setSelectedTaskGroup(group)}",
+   "onClick={() => setSelectedTaskGroup(null)}",
+   "onClick={() => setShowPassword(!showPassword)}",
+   "onClick={() => setTaskPage(p => Math.max(1, p - 1))}",
+   "onClick={() => setTaskPage(p => Math.min(totalTaskPages, p + 1))}",
+   "onClick={() => setUserFilter('active')}",
+   "onClick={() => setUserFilter('all')}",
+   "onClick={() => setUserFilter('deactivated')}",
+   "onClick={() => setUserFilter('issues')}",
+   "onClick={() => { if (confirm(`Deactivate ${u.full_name}? They will lose access to the dashboard.`)) { handleApproval(u.id, 'rejected'); } }}",
+   "onClick={() => { if (confirm(`Reactivate ${u.full_name}? They will regain access to the dashboard.`)) { handleApproval(u.id, 'approved'); } }}",
+   "onClick={(e) => e.stopPropagation()}",
+   "onClick={(e) => { e.stopPropagation(); handleRemoveMentee(m.id, m.full_name); }}",
+   "onClick={handleAcknowledgePromotion}",
+   "onClick={handleGoogleLogin}",
+   "onClick={handleGoogleSignup}",
+   "onClick={handleLogout}",
+   "onClick={handleSave}",
+   "onClick={handleSignOut}",
+   "onClick={handleSyncProgress}",
+   "onSubmit={handleAssignTask}",
+   "onSubmit={handleLogin}",
+   "onSubmit={handleRequestMentor}",
+   "onSubmit={handleSignup}",
+   "onSubmit={handleSubmit}"
+  ],
+  "links": [
+   "#incoming-requests",
+   "/admin",
+   "/dashboard",
+   "/login",
+   "/onboarding",
+   "/pending",
+   "/signup",
+   "{`/profile?id=${entry.user_id}`}",
+   "{`/profile?id=${m?.id}`}",
+   "{`/profile?id=${myEntry.user_id}`}",
+   "{cfUrl}",
+   "{getCodeforcesProfileUrl(cfHandle || profile?.cf_handle)!}",
+   "{getLeetCodeProfileUrl(lcHandle || profile?.lc_handle)!}",
+   "{getTaskLink(group)}",
+   "{getTaskLink(selectedTaskGroup)}",
+   "{getTaskLink(task)}",
+   "{lcUrl}"
+  ],
+  "fields": [
+   "branch",
+   "cf_handle",
+   "contact_number",
+   "email",
+   "full_name",
+   "lc_handle",
+   "password",
+   "roll_number",
+   "year"
+  ],
+  "hooks": [],
+  "ids": [
+   "email",
+   "incoming-requests",
+   "password"
+  ]
+ },
+ "scripts": {},
+ "pages": {}
+}

@@ -138,7 +138,19 @@ export default function Dashboard() {
 
     // 2. Fetch tasks assigned to me (now includes any scheduled tasks rolled out for today!)
     const { data: mTasks } = await supabase.from('tasks').select('*').eq('assigned_to', user.id).order('created_at', { ascending: false });
-    if (mTasks) setMyTasks(mTasks);
+    if (mTasks) {
+      const taskMap = new Map<string, any>();
+      mTasks.forEach((t: any) => {
+        const key = `${t.platform}-${t.problem_slug_or_id}-${t.assigned_date}`;
+        const existing = taskMap.get(key);
+        if (!existing) {
+          taskMap.set(key, t);
+        } else if (existing.status !== 'Completed' && t.status === 'Completed') {
+          taskMap.set(key, t);
+        }
+      });
+      setMyTasks(Array.from(taskMap.values()));
+    }
 
     // Fetch my mentees
     const { data: menteeships } = await supabase.from('mentorships').select('mentee:users!mentorships_mentee_id_fkey(*)').eq('mentor_id', user.id);
@@ -159,7 +171,19 @@ export default function Dashboard() {
 
     // Fetch tasks I assigned (with mentee details, including today's rolled out tasks)
     const { data: aTasks } = await supabase.from('tasks').select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email)').eq('assigned_by', user.id).order('created_at', { ascending: false });
-    if (aTasks) setAssignedTasks(aTasks);
+    if (aTasks) {
+      const taskMap = new Map<string, any>();
+      aTasks.forEach((t: any) => {
+        const key = `${t.assigned_to}-${t.platform}-${t.problem_slug_or_id}-${t.assigned_date}`;
+        const existing = taskMap.get(key);
+        if (!existing) {
+          taskMap.set(key, t);
+        } else if (existing.status !== 'Completed' && t.status === 'Completed') {
+          taskMap.set(key, t);
+        }
+      });
+      setAssignedTasks(Array.from(taskMap.values()));
+    }
 
     // Fetch all eligible users for requesting mentors (approved non-admin members only)
     const { data: users } = await supabase
@@ -220,12 +244,25 @@ export default function Dashboard() {
           platform: task.platform,
           problem_slug_or_id: task.problem_slug_or_id,
           assigned_date: task.assigned_date,
-          tasks: []
+          tasksByMentee: new Map(),
         };
       }
-      groups[key].tasks.push(task);
+      const menteeKey = task.assigned_to || task.assignee?.id || task.id;
+      const existing = groups[key].tasksByMentee.get(menteeKey);
+      if (!existing) {
+        groups[key].tasksByMentee.set(menteeKey, task);
+      } else if (existing.status !== 'Completed' && task.status === 'Completed') {
+        groups[key].tasksByMentee.set(menteeKey, task);
+      }
     });
-    return Object.values(groups);
+
+    return Object.values(groups).map((group: any) => ({
+      key: group.key,
+      platform: group.platform,
+      problem_slug_or_id: group.problem_slug_or_id,
+      assigned_date: group.assigned_date,
+      tasks: Array.from(group.tasksByMentee.values()),
+    }));
   }, [assignedTasks]);
 
   // Derived state for Mentee Progress & Alerts
@@ -236,7 +273,18 @@ export default function Dashboard() {
 
     myMentees.forEach(m => {
       const mTasks = menteeAllTasks.filter(t => t.assigned_to === m.id);
-      const completedTasks = mTasks.filter(t => t.status === 'Completed' && t.completed_at);
+      const taskMap = new Map<string, any>();
+      mTasks.forEach(t => {
+        const key = `${t.platform}-${t.problem_slug_or_id}-${t.assigned_date}`;
+        const existing = taskMap.get(key);
+        if (!existing) {
+          taskMap.set(key, t);
+        } else if (existing.status !== 'Completed' && t.status === 'Completed') {
+          taskMap.set(key, t);
+        }
+      });
+      const uniqueTasks = Array.from(taskMap.values());
+      const completedTasks = uniqueTasks.filter(t => t.status === 'Completed' && t.completed_at);
 
       // Find most recent completion time
       let lastCompletedTime = 0;
@@ -249,7 +297,7 @@ export default function Dashboard() {
       const hasAlert = (now - lastCompletedTime) > TWO_DAYS_MS;
 
       stats[m.id] = {
-        totalAssigned: mTasks.length,
+        totalAssigned: uniqueTasks.length,
         totalCompleted: completedTasks.length,
         hasAlert,
         lastCompletedTime
@@ -956,7 +1004,11 @@ export default function Dashboard() {
 
               <h4 className="text-sm font-bold text-surface-900 mb-3 border-b border-surface-100 pb-2">Mentees Still Pending</h4>
               <ul className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                {selectedTaskGroup.tasks.filter((t: any) => t.status !== 'Completed').map((t: any) => (
+                {Array.from(new Map(
+                  selectedTaskGroup.tasks
+                    .filter((t: any) => t.status !== 'Completed')
+                    .map((t: any) => [t.assigned_to || t.assignee?.id || t.id, t])
+                ).values()).map((t: any) => (
                   <li key={t.id} className="flex items-center justify-between p-3 rounded-lg bg-surface-50 text-sm">
                     <span className="font-medium text-surface-900">{t.assignee?.full_name}</span>
                     <span className="text-xs font-semibold text-amber-600 bg-amber-100 px-2 py-1 rounded-md">Pending</span>

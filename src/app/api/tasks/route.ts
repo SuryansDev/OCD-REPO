@@ -156,6 +156,29 @@ export async function POST(request: NextRequest) {
 
   // If a future date within 30 days was requested, route to scheduled_tasks
   if (targetDate > todayIST) {
+    const adminClient = createAdminSupabaseClient();
+
+    // Check if identical task is already scheduled
+    let dupQuery = adminClient
+      .from('scheduled_tasks')
+      .select('id')
+      .eq('mentor_id', user.id)
+      .eq('platform', parsed.platform)
+      .eq('problem_slug_or_id', parsed.problemSlugOrId)
+      .eq('scheduled_date', targetDate)
+      .eq('status', 'pending');
+
+    if (normalizedTargetYear) {
+      dupQuery = dupQuery.eq('target_year', normalizedTargetYear);
+    }
+
+    const { data: existingSched } = await dupQuery.limit(1);
+    if (existingSched && existingSched.length > 0) {
+      return NextResponse.json({
+        error: `This question is already scheduled for ${targetDate}.`
+      }, { status: 400 });
+    }
+
     const insertPayload: any = {
       mentor_id: user.id,
       platform: parsed.platform,
@@ -168,7 +191,6 @@ export async function POST(request: NextRequest) {
       insertPayload.target_year = normalizedTargetYear;
     }
 
-    const adminClient = createAdminSupabaseClient();
     let { data: scheduledTask, error: schedError } = await adminClient
       .from('scheduled_tasks')
       .insert(insertPayload)
@@ -210,7 +232,30 @@ export async function POST(request: NextRequest) {
   }
 
   // Immediate assignment for today (IST)
-  const taskRows = targetStudentIds.map((studentId) => ({
+  const uniqueStudentIds = Array.from(new Set(targetStudentIds)).filter(Boolean);
+  const adminClient = createAdminSupabaseClient();
+
+  // Query existing tasks for these students on todayIST
+  const { data: existingTasks } = await adminClient
+    .from('tasks')
+    .select('assigned_to')
+    .in('assigned_to', uniqueStudentIds)
+    .eq('platform', parsed.platform)
+    .eq('problem_slug_or_id', parsed.problemSlugOrId)
+    .eq('assigned_date', todayIST);
+
+  const alreadyAssignedSet = new Set((existingTasks || []).map((t: any) => t.assigned_to));
+  const studentsToAssign = uniqueStudentIds.filter((id) => !alreadyAssignedSet.has(id));
+
+  if (studentsToAssign.length === 0) {
+    return NextResponse.json({
+      success: true,
+      message: 'This question was already assigned to the selected students for today.',
+      count: 0,
+    });
+  }
+
+  const taskRows = studentsToAssign.map((studentId) => ({
     assigned_by: user.id,
     assigned_to: studentId,
     platform: parsed.platform,
@@ -219,7 +264,6 @@ export async function POST(request: NextRequest) {
     assigned_date: todayIST,
   }));
 
-  const adminClient = createAdminSupabaseClient();
   const { data: tasks, error: insertError } = await adminClient
     .from('tasks')
     .insert(taskRows)

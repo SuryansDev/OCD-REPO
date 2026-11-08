@@ -235,6 +235,12 @@ async function fetchLCContestHistory(handle: string) {
 
 // ─── Rollout Scheduled Tasks ────────────────────────────────
 export async function rollOutScheduledTasks(supabase: any, targetDateIST?: string) {
+  // Concurrency guard: prevent multiple concurrent rollouts within the same Node process
+  if ((globalThis as any).__ocdRolloutRunning) {
+    return { rolledOutCount: 0, totalTasksCreated: 0, errors: [] };
+  }
+  (globalThis as any).__ocdRolloutRunning = true;
+
   const todayIST = targetDateIST || getTodayIST();
   let rolledOutCount = 0;
   let totalTasksCreated = 0;
@@ -267,6 +273,23 @@ export async function rollOutScheduledTasks(supabase: any, targetDateIST?: strin
 
     for (const scheduled of pendingScheduled) {
       try {
+        // Atomically claim the scheduled task row to prevent race conditions across concurrent workers/requests
+        const { data: claimed, error: claimError } = await supabase
+          .from('scheduled_tasks')
+          .update({
+            status: 'rolled_out',
+            rolled_out_at: new Date().toISOString(),
+          })
+          .eq('id', scheduled.id)
+          .eq('status', 'pending')
+          .select('id')
+          .maybeSingle();
+
+        if (claimError || !claimed) {
+          // Task was already claimed or processed by a concurrent request
+          continue;
+        }
+
         // Support Common Mentor assigning to a whole year (or all years)
         let targetYear = (scheduled as any).target_year || null;
         let cleanProblemSlug = scheduled.problem_slug_or_id;
@@ -295,6 +318,8 @@ export async function rollOutScheduledTasks(supabase: any, targetDateIST?: strin
           const { data: students, error: studentError } = await studentQuery;
           if (studentError) {
             errors.push(`Scheduled task ${scheduled.id}: Failed to fetch year ${targetYear} students (${studentError.message})`);
+            // Revert status to pending so it can retry later
+            await supabase.from('scheduled_tasks').update({ status: 'pending', rolled_out_at: null }).eq('id', scheduled.id);
             continue;
           }
           targetStudentIds = (students || []).map((s: any) => s.id);
@@ -307,64 +332,60 @@ export async function rollOutScheduledTasks(supabase: any, targetDateIST?: strin
 
           if (msError) {
             errors.push(`Mentor ${scheduled.mentor_id}: Failed to fetch mentees (${msError.message})`);
+            // Revert status to pending so it can retry later
+            await supabase.from('scheduled_tasks').update({ status: 'pending', rolled_out_at: null }).eq('id', scheduled.id);
             continue;
           }
           targetStudentIds = (mentorships || []).map((m: any) => m.mentee_id);
         }
 
-        if (targetStudentIds.length > 0) {
-          for (const studentId of targetStudentIds) {
-            // Check if task already exists to prevent duplicate insertion
-            const { data: existing } = await supabase
+        // Deduplicate target student IDs
+        const uniqueStudentIds = Array.from(new Set(targetStudentIds)).filter(Boolean);
+
+        if (uniqueStudentIds.length > 0) {
+          // Query existing tasks for these students in a single batch query
+          const { data: existingTasks } = await supabase
+            .from('tasks')
+            .select('assigned_to')
+            .in('assigned_to', uniqueStudentIds)
+            .eq('platform', scheduled.platform)
+            .eq('problem_slug_or_id', cleanProblemSlug)
+            .eq('assigned_date', scheduled.scheduled_date);
+
+          const alreadyAssignedSet = new Set((existingTasks || []).map((t: any) => t.assigned_to));
+          const studentsToAssign = uniqueStudentIds.filter((id) => !alreadyAssignedSet.has(id));
+
+          if (studentsToAssign.length > 0) {
+            const taskRows = studentsToAssign.map((studentId) => ({
+              assigned_by: scheduled.mentor_id,
+              assigned_to: studentId,
+              platform: scheduled.platform,
+              problem_slug_or_id: cleanProblemSlug,
+              status: 'Pending',
+              assigned_date: scheduled.scheduled_date,
+            }));
+
+            const { error: insertError } = await supabase
               .from('tasks')
-              .select('id')
-              .eq('assigned_to', studentId)
-              .eq('platform', scheduled.platform)
-              .eq('problem_slug_or_id', cleanProblemSlug)
-              .eq('assigned_date', scheduled.scheduled_date)
-              .maybeSingle();
+              .insert(taskRows);
 
-            if (!existing) {
-              const { error: insertError } = await supabase
-                .from('tasks')
-                .insert({
-                  assigned_by: scheduled.mentor_id,
-                  assigned_to: studentId,
-                  platform: scheduled.platform,
-                  problem_slug_or_id: cleanProblemSlug,
-                  status: 'Pending',
-                  assigned_date: scheduled.scheduled_date,
-                });
-
-              if (insertError) {
-                errors.push(`Student ${studentId}: ${insertError.message}`);
-              } else {
-                totalTasksCreated++;
-              }
+            if (insertError) {
+              errors.push(`Scheduled task ${scheduled.id}: Failed to insert tasks: ${insertError.message}`);
+            } else {
+              totalTasksCreated += taskRows.length;
             }
           }
         }
 
-        // Mark the scheduled task as rolled_out
-        const { error: updateError } = await supabase
-          .from('scheduled_tasks')
-          .update({
-            status: 'rolled_out',
-            rolled_out_at: new Date().toISOString(),
-          })
-          .eq('id', scheduled.id);
-
-        if (updateError) {
-          errors.push(`Scheduled task ${scheduled.id}: ${updateError.message}`);
-        } else {
-          rolledOutCount++;
-        }
+        rolledOutCount++;
       } catch (err: any) {
         errors.push(`Scheduled task ${scheduled.id}: ${err?.message || err}`);
       }
     }
   } catch (err: any) {
     errors.push(`Rollout error: ${err?.message || err}`);
+  } finally {
+    (globalThis as any).__ocdRolloutRunning = false;
   }
 
   return { rolledOutCount, totalTasksCreated, errors };

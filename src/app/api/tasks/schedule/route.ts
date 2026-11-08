@@ -157,7 +157,35 @@ export async function POST(request: NextRequest) {
 
   // Case 1: Target date is today -> roll out immediately into tasks table
   if (targetDate === todayIST) {
-    const taskRows = targetStudentIds.map((studentId) => ({
+    const uniqueStudentIds = Array.from(new Set(targetStudentIds)).filter(Boolean);
+    const adminClient = createAdminSupabaseClient();
+
+    const recipientLabel = normalizedTargetYear
+      ? (normalizedTargetYear === 'all' ? 'all years' : `Year ${normalizedTargetYear}`)
+      : 'your cohort';
+
+    // Batch query existing tasks for these students on todayIST
+    const { data: existingTasks } = await adminClient
+      .from('tasks')
+      .select('assigned_to')
+      .in('assigned_to', uniqueStudentIds)
+      .eq('platform', parsed.platform)
+      .eq('problem_slug_or_id', parsed.problemSlugOrId)
+      .eq('assigned_date', todayIST);
+
+    const alreadyAssignedSet = new Set((existingTasks || []).map((t: any) => t.assigned_to));
+    const studentsToAssign = uniqueStudentIds.filter((id) => !alreadyAssignedSet.has(id));
+
+    if (studentsToAssign.length === 0) {
+      return NextResponse.json({
+        success: true,
+        rolledOutNow: true,
+        message: `This question was already assigned to ${recipientLabel} for today.`,
+        count: 0,
+      });
+    }
+
+    const taskRows = studentsToAssign.map((studentId) => ({
       assigned_by: user.id,
       assigned_to: studentId,
       platform: parsed.platform,
@@ -166,7 +194,6 @@ export async function POST(request: NextRequest) {
       assigned_date: todayIST,
     }));
 
-    const adminClient = createAdminSupabaseClient();
     const { data: tasks, error: insertError } = await adminClient
       .from('tasks')
       .insert(taskRows)
@@ -179,10 +206,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const recipientLabel = normalizedTargetYear
-      ? (normalizedTargetYear === 'all' ? 'all years' : `Year ${normalizedTargetYear}`)
-      : 'your cohort';
-
     return NextResponse.json({
       success: true,
       rolledOutNow: true,
@@ -192,6 +215,29 @@ export async function POST(request: NextRequest) {
   }
 
   // Case 2: Target date is in the future (within next 30 days) -> queue in scheduled_tasks table
+  const adminClient = createAdminSupabaseClient();
+
+  // Check if an identical scheduled task is already queued for this date
+  let dupQuery = adminClient
+    .from('scheduled_tasks')
+    .select('id')
+    .eq('mentor_id', user.id)
+    .eq('platform', parsed.platform)
+    .eq('problem_slug_or_id', parsed.problemSlugOrId)
+    .eq('scheduled_date', targetDate)
+    .eq('status', 'pending');
+
+  if (normalizedTargetYear) {
+    dupQuery = dupQuery.eq('target_year', normalizedTargetYear);
+  }
+
+  const { data: existingSched } = await dupQuery.limit(1);
+  if (existingSched && existingSched.length > 0) {
+    return NextResponse.json({
+      error: `This question is already scheduled for ${targetDate}.`
+    }, { status: 400 });
+  }
+
   const insertPayload: any = {
     mentor_id: user.id,
     platform: parsed.platform,
@@ -204,7 +250,6 @@ export async function POST(request: NextRequest) {
     insertPayload.target_year = normalizedTargetYear;
   }
 
-  const adminClient = createAdminSupabaseClient();
   let { data: scheduledTask, error: schedError } = await adminClient
     .from('scheduled_tasks')
     .insert(insertPayload)
