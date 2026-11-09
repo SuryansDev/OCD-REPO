@@ -1325,7 +1325,7 @@ export default function Dashboard() {
                               href={getTaskLink(task)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="font-semibold text-surface-900 group-hover:text-brand-600 inline-flex items-center gap-1.5 max-w-[200px] sm:max-w-[260px] truncate transition-colors"
+                              className="font-semibold text-surface-900 dark:text-surface-100 group-hover:text-brand-600 dark:group-hover:text-brand-400 inline-flex items-center gap-1.5 max-w-[200px] sm:max-w-[260px] truncate transition-colors"
                               title={task.problem_slug_or_id}
                             >
                               <span className="truncate">{formatProblemTitle(task.problem_slug_or_id, task.platform)}</span>
