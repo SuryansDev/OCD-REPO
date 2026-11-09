@@ -141,7 +141,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-50">
+      <div className="min-h-screen flex items-center justify-center bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
         <div className="flex items-center gap-3 text-surface-400">
           <Loader2 className="w-5 h-5 animate-spin" />
           <span className="text-sm font-medium">Loading Admin Dashboard…</span>
@@ -151,14 +151,14 @@ Please update your profile settings so your contest ratings and tasks can sync p
   }
 
   return (
-    <div className="min-h-screen bg-surface-50 pb-16">
+    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 pb-16 transition-colors duration-150">
       <Navbar fullName={profile?.full_name || ''} role="admin" />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-8 animate-fade-in flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black text-surface-900 tracking-tight">Admin Dashboard</h1>
-            <p className="text-surface-500 text-sm mt-1">Manage user approvals, coding profile health, mentorship cohorts, and rankings.</p>
+            <h1 className="text-2xl font-black text-surface-900 dark:text-surface-100 tracking-tight">Admin Dashboard</h1>
+            <p className="text-surface-500 dark:text-surface-400 text-sm mt-1">Manage user approvals, coding profile health, mentorship cohorts, and rankings.</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -174,7 +174,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
         {/* ─── SECTION 1: PROFILES WITH API / PRIVACY ISSUES ───────────────── */}
         {issueUsers.length > 0 && (
           <section className="mb-10 animate-fade-in">
-            <div className="card border-amber-200 border-2 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/40 p-6 shadow-sm">
+            <div className="card border-amber-200 dark:border-amber-800/80 border-2 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/40 dark:from-amber-950/40 dark:via-surface-900 dark:to-amber-950/20 p-6 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-amber-100 pb-4">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-amber-100 text-amber-700">
@@ -222,7 +222,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-surface-900 text-sm">{u.full_name}</span>
                           <span className="text-xs font-semibold px-2 py-0.5 rounded bg-surface-100 text-surface-600">
-                            Year {u.year || 'N/A'} &bull; {u.branch || 'N/A'}
+                            Year {u.year || 'N/A'} • {u.branch || 'N/A'}
                           </span>
                           <span className="text-xs text-surface-400 font-mono">
                             {u.email}
@@ -338,7 +338,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-surface-100 text-surface-600 font-semibold uppercase text-xs">
+                <thead className="bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 font-semibold uppercase text-xs border-b border-surface-200 dark:border-surface-700">
                   <tr>
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Email</th>
@@ -347,7 +347,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-200">
+                <tbody className="divide-y divide-surface-200 dark:divide-surface-800">
                   {pendingUsers.map(u => {
                     const lcClean = cleanLeetCodeHandle(u.lc_handle);
                     const cfClean = cleanCodeforcesHandle(u.cf_handle);
@@ -355,9 +355,9 @@ Please update your profile settings so your contest ratings and tasks can sync p
                     const cfUrl = getCodeforcesProfileUrl(u.cf_handle);
 
                     return (
-                      <tr key={u.id} className="hover:bg-surface-50">
-                        <td className="px-4 py-3 font-medium text-surface-900">{u.full_name}</td>
-                        <td className="px-4 py-3 text-surface-500">{u.email}</td>
+                      <tr key={u.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50">
+                        <td className="px-4 py-3 font-medium text-surface-900 dark:text-surface-100">{u.full_name}</td>
+                        <td className="px-4 py-3 text-surface-500 dark:text-surface-400">{u.email}</td>
                         <td className="px-4 py-3 text-surface-500 text-xs">
                           {u.year && <span>Y: {u.year} </span>}
                           {u.branch && <span>B: {u.branch}</span>}
@@ -592,7 +592,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-surface-100 text-surface-600 font-semibold uppercase text-xs">
+                <thead className="bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 font-semibold uppercase text-xs border-b border-surface-200 dark:border-surface-700">
                   <tr>
                     <th className="px-4 py-3">Name &amp; Roll</th>
                     <th className="px-4 py-3">Year</th>
@@ -603,7 +603,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-surface-200">
+                <tbody className="divide-y divide-surface-200 dark:divide-surface-800">
                   {filteredUsers.map(u => {
                     const stats = userStats[u.id];
                     const lcClean = cleanLeetCodeHandle(u.lc_handle);
@@ -616,17 +616,17 @@ Please update your profile settings so your contest ratings and tasks can sync p
                     const hasAnyIssue = isIssueUser(u);
 
                     return (
-                      <tr key={u.id} className={`hover:bg-surface-50 ${u.approval_status === 'rejected' ? 'opacity-60' : ''}`}>
+                      <tr key={u.id} className={`hover:bg-surface-50 dark:hover:bg-surface-800/50 ${u.approval_status === 'rejected' ? 'opacity-60' : ''}`}>
                         <td className="px-4 py-3">
-                          <div className="font-medium text-surface-900">{u.full_name}</div>
+                          <div className="font-medium text-surface-900 dark:text-surface-100">{u.full_name}</div>
                           {u.roll_number && (
                             <div className="text-[11px] text-surface-400 font-mono">{u.roll_number}</div>
                           )}
                         </td>
-                        <td className="px-4 py-3 font-bold text-surface-700 whitespace-nowrap">
+                        <td className="px-4 py-3 font-bold text-surface-700 dark:text-surface-300 whitespace-nowrap">
                           {u.year === 'Alumni' ? '🎓 Alumni' : u.year || '—'}
                         </td>
-                        <td className="px-4 py-3 text-surface-500 text-xs font-mono">{u.email}</td>
+                        <td className="px-4 py-3 text-surface-500 dark:text-surface-400 text-xs font-mono">{u.email}</td>
                         <td className="px-4 py-3 text-xs">
                           <div className="space-y-1">
                             {/* LeetCode link */}

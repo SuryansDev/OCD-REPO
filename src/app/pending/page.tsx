@@ -3,6 +3,7 @@
 import { LogOut, Clock } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import DarkModeToggle from '@/components/DarkModeToggle';
 
 export default function PendingPage() {
   const supabase = createClient();
@@ -14,13 +15,17 @@ export default function PendingPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-surface-50 dark:bg-surface-950 p-4 relative transition-colors duration-150">
+      <div className="absolute top-4 right-4 z-20">
+        <DarkModeToggle />
+      </div>
+
       <div className="max-w-md w-full glass-card rounded-3xl p-8 text-center animate-fade-in">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-amber-50 mb-6">
+        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-amber-50 dark:bg-amber-950/60 mb-6 border border-amber-200/50 dark:border-amber-800/50">
           <Clock className="w-10 h-10 text-amber-500" />
         </div>
-        <h1 className="text-2xl font-bold text-surface-900 mb-2">Approval Pending</h1>
-        <p className="text-surface-500 mb-8">
+        <h1 className="text-2xl font-bold text-surface-900 dark:text-surface-100 mb-2">Approval Pending</h1>
+        <p className="text-surface-500 dark:text-surface-400 mb-8">
           Your account has been created successfully but is currently waiting for administrator approval. Please check back later.
         </p>
         <button onClick={handleLogout} className="btn-secondary w-full">

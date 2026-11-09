@@ -23,6 +23,7 @@ import {
   getLeetCodeProfileUrl,
 } from '@/lib/handles';
 import { getTodayIST, getDateOffsetIST, formatScheduledDateLabel } from '@/lib/dateUtils';
+import { getLeaderboardTier, getCFRatingTier, RatingColoredName, useRatingColorPreference } from '@/lib/ratingColors';
 
 const getTaskLink = (task: any) => {
   const cleanId = (task.problem_slug_or_id || '').replace(/::year:.*$/, '');
@@ -62,6 +63,7 @@ const formatProblemTitle = (slugOrId: string, platform: string) => {
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [showRatingColors] = useRatingColorPreference();
 
   // My mentee role state
   const [myTasks, setMyTasks] = useState<Task[]>([]);
@@ -162,11 +164,31 @@ export default function Dashboard() {
     const mentors = mentorships ? mentorships.map((m: any) => m.mentor) : [];
     setMyMentors(mentors);
 
-    // Fetch all tasks for my mentees (to calculate progress and alerts)
+    // Fetch all tasks for my mentees (to calculate progress and alerts regardless of who assigned them)
     if (mentees.length > 0) {
-      const menteeIds = mentees.map((m: any) => m.id);
-      const { data: allMenteeTasks } = await supabase.from('tasks').select('*').in('assigned_to', menteeIds);
-      if (allMenteeTasks) setMenteeAllTasks(allMenteeTasks);
+      try {
+        const menteeRes = await fetch('/api/tasks/mentees');
+        if (menteeRes.ok) {
+          const menteeData = await menteeRes.json();
+          if (menteeData.tasks) {
+            setMenteeAllTasks(menteeData.tasks);
+          }
+        } else {
+          const menteeIds = mentees.map((m: any) => m.id);
+          const { data: allMenteeTasks } = await supabase
+            .from('tasks')
+            .select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email, year), assigner:users!tasks_assigned_by_fkey(id, full_name, role)')
+            .in('assigned_to', menteeIds);
+          if (allMenteeTasks) setMenteeAllTasks(allMenteeTasks);
+        }
+      } catch {
+        const menteeIds = mentees.map((m: any) => m.id);
+        const { data: allMenteeTasks } = await supabase
+          .from('tasks')
+          .select('*')
+          .in('assigned_to', menteeIds);
+        if (allMenteeTasks) setMenteeAllTasks(allMenteeTasks);
+      }
     }
 
     // Fetch tasks I assigned (with mentee details, including today's rolled out tasks)
@@ -233,10 +255,24 @@ export default function Dashboard() {
     fetchData();
   }, [fetchData]);
 
+  // Cohort tasks: combines tasks assigned by this mentor and tasks assigned to their mentees by any mentor or common mentor
+  const allCohortTasks = useMemo(() => {
+    const taskMap = new Map<string, any>();
+    // First include tasks assigned by this mentor
+    assignedTasks.forEach((t) => {
+      taskMap.set(`${t.id}`, t);
+    });
+    // Include all tasks assigned to this mentor's mentees (regardless of assigner)
+    menteeAllTasks.forEach((t) => {
+      taskMap.set(`${t.id}`, t);
+    });
+    return Array.from(taskMap.values());
+  }, [assignedTasks, menteeAllTasks]);
+
   // Derived state for Task Groups (Grouping by platform + problem_id)
   const groupedTasks = useMemo(() => {
     const groups: Record<string, any> = {};
-    assignedTasks.forEach(task => {
+    allCohortTasks.forEach(task => {
       const key = `${task.platform}-${task.problem_slug_or_id}-${task.assigned_date}`;
       if (!groups[key]) {
         groups[key] = {
@@ -263,9 +299,9 @@ export default function Dashboard() {
       assigned_date: group.assigned_date,
       tasks: Array.from(group.tasksByMentee.values()),
     }));
-  }, [assignedTasks]);
+  }, [allCohortTasks]);
 
-  // Derived state for Mentee Progress & Alerts
+  // Derived state for Mentee Progress & Alerts (across all tasks assigned to each mentee)
   const menteeStats = useMemo(() => {
     const stats: Record<string, any> = {};
     const now = new Date().getTime();
@@ -284,21 +320,24 @@ export default function Dashboard() {
         }
       });
       const uniqueTasks = Array.from(taskMap.values());
-      const completedTasks = uniqueTasks.filter(t => t.status === 'Completed' && t.completed_at);
+      const completedTasks = uniqueTasks.filter(t => t.status === 'Completed');
 
       // Find most recent completion time
       let lastCompletedTime = 0;
       completedTasks.forEach(t => {
-        const time = new Date(t.completed_at).getTime();
-        if (time > lastCompletedTime) lastCompletedTime = time;
+        if (t.completed_at) {
+          const time = new Date(t.completed_at).getTime();
+          if (time > lastCompletedTime) lastCompletedTime = time;
+        }
       });
 
-      // Alert if no completed tasks in last 48 hours (or never completed any)
-      const hasAlert = (now - lastCompletedTime) > TWO_DAYS_MS;
+      // Alert if no completed tasks in last 48 hours (only if they have assigned tasks)
+      const hasAlert = uniqueTasks.length > 0 && (now - lastCompletedTime) > TWO_DAYS_MS;
 
       stats[m.id] = {
         totalAssigned: uniqueTasks.length,
         totalCompleted: completedTasks.length,
+        tasks: uniqueTasks,
         hasAlert,
         lastCompletedTime
       };
@@ -891,7 +930,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-50">
+      <div className="min-h-screen flex items-center justify-center bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
         <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
       </div>
     );
@@ -899,7 +938,7 @@ export default function Dashboard() {
 
   if (profile?.year === 'Alumni') {
     return (
-      <div className="min-h-screen bg-surface-50 relative overflow-hidden">
+      <div className="min-h-screen bg-surface-50 dark:bg-surface-950 relative overflow-hidden transition-colors duration-150">
         <Confetti />
         <Navbar fullName={profile.full_name} role={profile.role as any} />
 
@@ -908,24 +947,24 @@ export default function Dashboard() {
             <span className="text-5xl">🎓</span>
           </div>
 
-          <h1 className="text-4xl md:text-5xl font-black text-surface-900 tracking-tight mb-6">
+          <h1 className="text-4xl md:text-5xl font-black text-surface-900 dark:text-surface-100 tracking-tight mb-6">
             Welcome to the <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-yellow-400">Hall of Fame</span>
           </h1>
 
-          <p className="text-lg text-surface-600 max-w-2xl leading-relaxed mb-12">
+          <p className="text-lg text-surface-600 dark:text-surface-300 max-w-2xl leading-relaxed mb-12">
             You have successfully completed your journey and are now officially an OCD Alumni.
             Thank you for your incredible service, dedication, and the knowledge you passed down
             to your mentees. OCD will forever remember your legacy!
           </p>
 
           <div className="grid sm:grid-cols-2 gap-6 w-full max-w-2xl">
-            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-amber-100 shadow-xl shadow-amber-900/5">
-              <div className="text-4xl font-black text-amber-600 mb-2">{myMentees.length}</div>
-              <div className="text-sm font-bold text-surface-500 uppercase tracking-wider">Lives Mentored</div>
+            <div className="bg-white/80 dark:bg-surface-900/80 backdrop-blur-sm p-6 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-xl shadow-amber-900/5">
+              <div className="text-4xl font-black text-amber-600 dark:text-amber-400 mb-2">{myMentees.length}</div>
+              <div className="text-sm font-bold text-surface-500 dark:text-surface-400 uppercase tracking-wider">Lives Mentored</div>
             </div>
-            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-emerald-100 shadow-xl shadow-emerald-900/5">
-              <div className="text-4xl font-black text-emerald-600 mb-2">{assignedTasks.length}</div>
-              <div className="text-sm font-bold text-surface-500 uppercase tracking-wider">Tasks Assigned</div>
+            <div className="bg-white/80 dark:bg-surface-900/80 backdrop-blur-sm p-6 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-xl shadow-emerald-900/5">
+              <div className="text-4xl font-black text-emerald-600 dark:text-emerald-400 mb-2">{assignedTasks.length}</div>
+              <div className="text-sm font-bold text-surface-500 dark:text-surface-400 uppercase tracking-wider">Tasks Assigned</div>
             </div>
           </div>
         </main>
@@ -938,7 +977,7 @@ export default function Dashboard() {
     .filter(u => !myMentors.find(m => m.id === u.id) && !pendingRequests.find(r => r.mentor_id === u.id));
 
   return (
-    <div className="min-h-screen bg-surface-50 relative">
+    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 relative transition-colors duration-150">
       {showConfetti && <Confetti />}
       {showPromotion && <Confetti />}
       <Navbar fullName={profile?.full_name || ''} role={profile?.role as any} />
@@ -946,13 +985,13 @@ export default function Dashboard() {
       {/* --- MODAL: PROMOTION --- */}
       {showPromotion && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden text-center p-8">
+          <div className="bg-white dark:bg-surface-900 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-800 w-full max-w-sm overflow-hidden text-center p-8">
             <div className="w-20 h-20 bg-gradient-to-tr from-brand-400 to-brand-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-brand-500/30">
               <span className="text-4xl">🚀</span>
             </div>
-            <h2 className="text-3xl font-black text-surface-900 tracking-tight mb-2">Congratulations!</h2>
-            <p className="text-surface-600 mb-8 leading-relaxed">
-              You have successfully completed the academic year and have been promoted to <strong className="text-brand-600">Year {profile?.year}</strong>. Keep up the great work!
+            <h2 className="text-3xl font-black text-surface-900 dark:text-surface-100 tracking-tight mb-2">Congratulations!</h2>
+            <p className="text-surface-600 dark:text-surface-300 mb-8 leading-relaxed">
+              You have successfully completed the academic year and have been promoted to <strong className="text-brand-600 dark:text-brand-400">Year {profile?.year}</strong>. Keep up the great work!
             </p>
             <button
               onClick={handleAcknowledgePromotion}
@@ -967,21 +1006,21 @@ export default function Dashboard() {
       {/* --- MODAL: TASK GROUP DETAILS --- */}
       {selectedTaskGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-            <div className="p-5 border-b border-surface-100 flex justify-between items-center bg-surface-50">
+          <div className="bg-white dark:bg-surface-900 rounded-2xl shadow-xl border border-surface-200 dark:border-surface-800 w-full max-w-lg overflow-hidden">
+            <div className="p-5 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50 dark:bg-surface-850">
               <div>
                 <a
                   href={getTaskLink(selectedTaskGroup)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-xl font-bold text-brand-600 hover:text-brand-800 transition-colors w-fit group"
+                  className="flex items-center gap-2 text-xl font-bold text-brand-600 dark:text-brand-400 hover:text-brand-800 dark:hover:text-brand-300 transition-colors w-fit group"
                 >
                   {selectedTaskGroup.problem_slug_or_id}
                   <ExternalLink className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </a>
-                <p className="text-xs font-semibold text-surface-500 mt-1 uppercase tracking-wider">{selectedTaskGroup.platform} &bull; Assigned {new Date(selectedTaskGroup.assigned_date).toLocaleDateString()}</p>
+                <p className="text-xs font-semibold text-surface-500 dark:text-surface-400 mt-1 uppercase tracking-wider">{selectedTaskGroup.platform} • Assigned {new Date(selectedTaskGroup.assigned_date).toLocaleDateString()}</p>
               </div>
-              <button onClick={() => setSelectedTaskGroup(null)} className="p-2 text-surface-400 hover:text-surface-700 hover:bg-surface-200 rounded-lg transition-colors">
+              <button onClick={() => setSelectedTaskGroup(null)} className="p-2 text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-surface-200 dark:hover:bg-surface-800 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1025,38 +1064,169 @@ export default function Dashboard() {
 
       {/* --- MODAL: MENTEE PROGRESS --- */}
       {selectedMentee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-            <div className="p-5 border-b border-surface-100 flex justify-between items-start bg-surface-50">
-              <div>
-                <h3 className="text-lg font-bold text-surface-900">{selectedMentee.full_name}</h3>
-                <p className="text-xs font-semibold text-surface-500 mt-1">{selectedMentee.email} &bull; Year {selectedMentee.year}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in backdrop-blur-xs">
+          <div className="bg-white dark:bg-surface-900 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-800 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-surface-100 dark:border-surface-800 flex justify-between items-start bg-surface-50 dark:bg-surface-850 shrink-0">
+              <div className="min-w-0 pr-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-surface-900 dark:text-surface-100 truncate">{selectedMentee.full_name}</h3>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-brand-100 dark:bg-brand-950/80 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 px-2 py-0.5 rounded-full shrink-0">
+                    Mentee Progress
+                  </span>
+                </div>
+                <p className="text-xs font-semibold text-surface-500 dark:text-surface-400 mt-1 truncate">
+                  {selectedMentee.email} • Year {selectedMentee.year}{selectedMentee.branch ? ` • ${selectedMentee.branch}` : ''}
+                </p>
               </div>
-              <button onClick={() => setSelectedMentee(null)} className="p-2 text-surface-400 hover:text-surface-700 hover:bg-surface-200 rounded-lg transition-colors -mt-1 -mr-1">
+              <button
+                onClick={() => setSelectedMentee(null)}
+                className="p-2 text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-surface-200 dark:hover:bg-surface-800 rounded-lg transition-colors -mt-1 -mr-1 shrink-0"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            {/* Modal Scrollable Content */}
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
               {menteeStats[selectedMentee.id]?.hasAlert && (
-                <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-xl flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 shrink-0 text-red-600 mt-0.5" />
+                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 text-red-800 dark:text-red-300 p-3.5 rounded-xl flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 shrink-0 text-red-600 dark:text-red-400 mt-0.5" />
                   <div>
                     <div className="font-bold text-sm">Inactivity Alert</div>
-                    <div className="text-xs mt-1">This mentee has not completed any assigned tasks in the last 48 hours.</div>
+                    <div className="text-xs mt-1 leading-relaxed">
+                      This mentee has not completed any assigned tasks in the last 48 hours.
+                    </div>
                   </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-surface-50 rounded-xl p-4 border border-surface-100 text-center">
-                  <div className="text-3xl font-black text-surface-900">{menteeStats[selectedMentee.id]?.totalAssigned || 0}</div>
-                  <div className="text-xs font-bold text-surface-500 uppercase mt-2">Total Assigned</div>
+              {/* Progress Summary Cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-surface-50 dark:bg-surface-850 rounded-xl p-3.5 border border-surface-100 dark:border-surface-800 text-center">
+                  <div className="text-2xl font-black text-surface-900 dark:text-surface-100">
+                    {menteeStats[selectedMentee.id]?.totalAssigned || 0}
+                  </div>
+                  <div className="text-[11px] font-bold text-surface-500 dark:text-surface-400 uppercase mt-1">
+                    Total Assigned
+                  </div>
                 </div>
-                <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 text-center">
-                  <div className="text-3xl font-black text-emerald-700">{menteeStats[selectedMentee.id]?.totalCompleted || 0}</div>
-                  <div className="text-xs font-bold text-emerald-600 uppercase mt-2">Total Done</div>
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 rounded-xl p-3.5 border border-emerald-100 dark:border-emerald-800/60 text-center">
+                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
+                    {menteeStats[selectedMentee.id]?.totalCompleted || 0}
+                  </div>
+                  <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase mt-1">
+                    Completed
+                  </div>
                 </div>
+                <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-3.5 border border-amber-100 dark:border-amber-800/60 text-center">
+                  <div className="text-2xl font-black text-amber-700 dark:text-amber-300">
+                    {Math.max(0, (menteeStats[selectedMentee.id]?.totalAssigned || 0) - (menteeStats[selectedMentee.id]?.totalCompleted || 0))}
+                  </div>
+                  <div className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase mt-1">
+                    Pending
+                  </div>
+                </div>
+              </div>
+
+              {/* Completion Progress Bar */}
+              {(() => {
+                const total = menteeStats[selectedMentee.id]?.totalAssigned || 0;
+                const completed = menteeStats[selectedMentee.id]?.totalCompleted || 0;
+                const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                return (
+                  <div>
+                    <div className="flex justify-between items-center text-xs font-bold mb-1.5 text-surface-700 dark:text-surface-300">
+                      <span>Overall Progress</span>
+                      <span className="text-brand-600 dark:text-brand-400">{pct}% ({completed}/{total})</span>
+                    </div>
+                    <div className="w-full h-2.5 bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-500 to-brand-500 rounded-full transition-all duration-300"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Detailed Tasks List */}
+              <div>
+                <div className="flex items-center justify-between mb-3 border-b border-surface-100 dark:border-surface-800 pb-2">
+                  <h4 className="text-xs font-bold text-surface-900 dark:text-surface-100 uppercase tracking-wider">
+                    Assigned Problems ({menteeStats[selectedMentee.id]?.tasks?.length || 0})
+                  </h4>
+                  <span className="text-[10px] text-surface-400 font-medium">All mentors &amp; common mentors</span>
+                </div>
+
+                {(!menteeStats[selectedMentee.id]?.tasks || menteeStats[selectedMentee.id]?.tasks.length === 0) ? (
+                  <div className="p-6 text-center text-xs text-surface-400 border border-dashed border-surface-200 dark:border-surface-800 rounded-xl">
+                    No tasks assigned to this student yet.
+                  </div>
+                ) : (
+                  <ul className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                    {menteeStats[selectedMentee.id]?.tasks.map((task: any) => {
+                      const isCompleted = task.status === 'Completed';
+                      const isAssignedByMe = task.assigned_by === profile?.id;
+                      const isCommonMentorAssigner = task.assigner?.role === 'common_mentor';
+
+                      return (
+                        <li
+                          key={task.id}
+                          className="p-3 rounded-xl bg-surface-50 dark:bg-surface-850 border border-surface-200/80 dark:border-surface-800 flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <PlatformBadge platform={task.platform} />
+                              <span className="text-[10px] text-surface-400 font-medium">
+                                {task.assigned_date}
+                              </span>
+                              {isAssignedByMe ? (
+                                <span className="text-[10px] font-bold bg-brand-100 dark:bg-brand-950 text-brand-700 dark:text-brand-300 px-1.5 py-0.2 rounded border border-brand-200 dark:border-brand-800">
+                                  You
+                                </span>
+                              ) : isCommonMentorAssigner ? (
+                                <span className="text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800">
+                                  Common Mentor
+                                </span>
+                              ) : task.assigner?.full_name ? (
+                                <span className="text-[10px] font-medium text-surface-500 dark:text-surface-400 bg-surface-100 dark:bg-surface-800 px-1.5 py-0.2 rounded">
+                                  by {task.assigner.full_name}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-surface-900 dark:text-surface-100 truncate">
+                                {formatProblemTitle(task.problem_slug_or_id, task.platform)}
+                              </span>
+                              <a
+                                href={getTaskLink(task)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-surface-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors shrink-0"
+                                title="Open Problem Link"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 text-right">
+                            {isCompleted ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                                <CheckCircle className="w-3.5 h-3.5" /> Done
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">
+                                <Clock className="w-3.5 h-3.5" /> Pending
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             </div>
           </div>
@@ -1073,11 +1243,11 @@ export default function Dashboard() {
           <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.1s' }}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-brand-100 rounded-xl text-brand-600 shadow-sm shadow-brand-500/10">
+                <div className="p-2.5 bg-brand-100 dark:bg-brand-950/80 rounded-xl text-brand-600 dark:text-brand-300 shadow-sm shadow-brand-500/10">
                   <Code2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-surface-900">My Assignments</h2>
+                  <h2 className="text-xl font-bold text-surface-900 dark:text-surface-100">My Assignments</h2>
                   <p className="text-xs text-surface-400 mt-0.5">
                     {completedCount} of {myTasks.length} solved
                   </p>
@@ -1101,10 +1271,10 @@ export default function Dashboard() {
             </div>
 
             {/* LeetCode-style Problem Table */}
-            <div className="border border-surface-200 rounded-xl overflow-hidden bg-white">
+            <div className="border border-surface-200 dark:border-surface-800 rounded-xl overflow-hidden bg-white dark:bg-surface-900">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-surface-100/80 text-surface-600 font-semibold uppercase text-[11px] tracking-wider border-b border-surface-200">
+                  <thead className="bg-surface-100/80 dark:bg-surface-800/80 text-surface-600 dark:text-surface-300 font-semibold uppercase text-[11px] tracking-wider border-b border-surface-200 dark:border-surface-700">
                     <tr>
                       <th className="py-2.5 px-3 w-10 text-center">Status</th>
                       <th className="py-2.5 px-4">Problem</th>
@@ -1113,12 +1283,12 @@ export default function Dashboard() {
                       <th className="py-2.5 px-4 w-24 text-right">State</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-surface-200/80">
+                  <tbody className="divide-y divide-surface-200/80 dark:divide-surface-800">
                     {myTasks.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-4 py-12 text-center text-surface-400">
-                          <Code2 className="w-8 h-8 text-surface-300 mx-auto mb-2" />
-                          <p className="font-semibold text-surface-700 text-sm">No assignments assigned yet</p>
+                          <Code2 className="w-8 h-8 text-surface-300 dark:text-surface-600 mx-auto mb-2" />
+                          <p className="font-semibold text-surface-700 dark:text-surface-200 text-sm">No assignments assigned yet</p>
                           <p className="text-xs text-surface-400 mt-1">When your mentor assigns questions or videos, they will appear here.</p>
                         </td>
                       </tr>
@@ -1229,8 +1399,8 @@ export default function Dashboard() {
               </div>
 
               {/* Slider / Pagination Footer */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 border-t border-surface-200">
-                <span className="text-xs text-surface-500 font-medium order-2 sm:order-1">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 dark:bg-surface-850/70 border-t border-surface-200 dark:border-surface-800">
+                <span className="text-xs text-surface-500 dark:text-surface-400 font-medium order-2 sm:order-1">
                   Showing {sortedTasks.length === 0 ? 0 : (safeTaskPage - 1) * TASKS_PER_PAGE + 1}–{Math.min(safeTaskPage * TASKS_PER_PAGE, sortedTasks.length)} of {sortedTasks.length} questions
                 </span>
 
@@ -1238,7 +1408,7 @@ export default function Dashboard() {
                   <button
                     onClick={() => setTaskPage(p => Math.max(1, p - 1))}
                     disabled={safeTaskPage <= 1}
-                    className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                    className="p-1 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 dark:text-surface-300 transition-all shadow-sm"
                     title="Previous page"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -1251,18 +1421,18 @@ export default function Dashboard() {
                     value={safeTaskPage}
                     onChange={(e) => setTaskPage(Number(e.target.value))}
                     disabled={totalTaskPages <= 1}
-                    className="w-20 accent-brand-600 h-1.5 bg-surface-200 rounded-lg cursor-pointer disabled:opacity-40"
+                    className="w-20 accent-brand-600 h-1.5 bg-surface-200 dark:bg-surface-700 rounded-lg cursor-pointer disabled:opacity-40"
                     title="Slide through questions"
                   />
 
-                  <span className="text-xs font-semibold text-surface-700 min-w-[50px] text-center">
+                  <span className="text-xs font-semibold text-surface-700 dark:text-surface-200 min-w-[50px] text-center">
                     {safeTaskPage} / {totalTaskPages}
                   </span>
 
                   <button
                     onClick={() => setTaskPage(p => Math.min(totalTaskPages, p + 1))}
                     disabled={safeTaskPage >= totalTaskPages}
-                    className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                    className="p-1 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 dark:text-surface-300 transition-all shadow-sm"
                     title="Next page"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -1278,11 +1448,11 @@ export default function Dashboard() {
             <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.2s' }}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600 shadow-sm shadow-amber-500/10">
+                  <div className="p-2.5 bg-amber-100 dark:bg-amber-950/80 rounded-xl text-amber-600 dark:text-amber-400 shadow-sm shadow-amber-500/10">
                     <Trophy className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-surface-900">Leaderboard</h2>
+                    <h2 className="text-xl font-bold text-surface-900 dark:text-surface-100">Leaderboard</h2>
                     <p className="text-xs text-surface-400 mt-0.5">
                       {sortedLeaderboard.length} participants ranked {leaderboardYearFilter !== 'all' ? `• Year ${leaderboardYearFilter}` : ''}
                     </p>
@@ -1290,7 +1460,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Academic Year Filter Pills */}
-                <div className="inline-flex items-center gap-1 bg-surface-100/80 p-1 rounded-xl border border-surface-200/80 self-start sm:self-auto">
+                <div className="inline-flex items-center gap-1 bg-surface-100/80 dark:bg-surface-850/80 p-1 rounded-xl border border-surface-200/80 dark:border-surface-700/80 self-start sm:self-auto">
                   <span className="text-[10px] font-bold text-surface-400 uppercase px-1.5 hidden md:inline">Year:</span>
                   {([
                     { key: 'all', label: 'All', title: 'All Years' },
@@ -1305,8 +1475,8 @@ export default function Dashboard() {
                       onClick={() => handleYearFilterChange(f.key)}
                       title={f.title}
                       className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${leaderboardYearFilter === f.key
-                        ? 'bg-white text-surface-900 shadow-xs border border-surface-200 font-extrabold'
-                        : 'text-surface-500 hover:text-surface-900 hover:bg-surface-200/60'
+                        ? 'bg-white dark:bg-surface-700 text-surface-900 dark:text-surface-100 shadow-xs border border-surface-200 dark:border-surface-600 font-extrabold'
+                        : 'text-surface-500 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-100 hover:bg-surface-200/60 dark:hover:bg-surface-800'
                         }`}
                     >
                       {f.label}
@@ -1330,7 +1500,7 @@ export default function Dashboard() {
                     onClick={() => handleTabChange(tab.key)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${leaderboardTab === tab.key
                       ? 'bg-brand-600 text-white shadow-md shadow-brand-500/30'
-                      : 'bg-surface-100 text-surface-600 hover:bg-surface-200'
+                      : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 hover:bg-surface-200 dark:hover:bg-surface-700'
                       }`}
                   >
                     {tab.label}
@@ -1340,7 +1510,7 @@ export default function Dashboard() {
 
               {/* PINNED USER STANDING CARD (Always at top so you never have to find your rank) */}
               {myEntry ? (
-                <div className="bg-gradient-to-r from-brand-50 via-indigo-50/70 to-purple-50 border border-brand-200/90 rounded-2xl p-3.5 mb-3 shadow-xs flex items-center justify-between gap-3 animate-fade-in">
+                <div className="bg-gradient-to-r from-brand-50 via-indigo-50/70 to-purple-50 dark:from-brand-950/60 dark:via-indigo-950/40 dark:to-purple-950/50 border border-brand-200/90 dark:border-brand-800/80 rounded-2xl p-3.5 mb-3 shadow-xs flex items-center justify-between gap-3 animate-fade-in">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center font-black text-sm shadow-md shadow-brand-500/25 shrink-0">
                       {myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : myRank === 3 ? '🥉' : `#${myRank}`}
@@ -1350,21 +1520,25 @@ export default function Dashboard() {
                         <span className="text-[10px] font-black uppercase tracking-wider bg-brand-600 text-white px-1.5 py-0.5 rounded-md">
                           YOUR RANKING {leaderboardYearFilter !== 'all' ? `(YEAR ${leaderboardYearFilter})` : ''}
                         </span>
-                        <span className="text-xs font-semibold text-surface-500">Year {myEntry.user?.year === 'Alumni' ? '🎓' : myEntry.user?.year}</span>
+                        <span className="text-xs font-semibold text-surface-500 dark:text-surface-400">Year {myEntry.user?.year === 'Alumni' ? '🎓' : myEntry.user?.year}</span>
                       </div>
-                      <p className="font-bold text-surface-900 text-sm truncate">
+                      <p className="font-bold text-sm truncate">
                         <Link 
                           href={`/profile?id=${myEntry.user_id}`}
-                          className="hover:text-brand-600 hover:underline transition-colors cursor-pointer"
-                          title="View Profile"
+                          className="hover:underline transition-colors cursor-pointer"
+                          title={`${myEntry.user?.full_name} • ${getLeaderboardTier(leaderboardTab, myEntry).label}${getLeaderboardTier(leaderboardTab, myEntry).rating ? ` (${getLeaderboardTier(leaderboardTab, myEntry).rating})` : ''}`}
                         >
-                          {myEntry.user?.full_name}
+                          <RatingColoredName
+                            name={myEntry.user?.full_name || ''}
+                            tier={getLeaderboardTier(leaderboardTab, myEntry)}
+                            enabled={showRatingColors}
+                          />
                         </Link>
                       </p>
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0 bg-white/90 backdrop-blur-sm border border-brand-200/80 rounded-xl px-3 py-1.5 shadow-xs">
+                  <div className="text-right shrink-0 bg-white/90 dark:bg-surface-850/90 backdrop-blur-sm border border-brand-200/80 dark:border-brand-800/80 rounded-xl px-3 py-1.5 shadow-xs">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-surface-400">
                       {leaderboardTab === 'streak' && 'Streak'}
                       {leaderboardTab === 'lc_rating' && 'LC Rating'}
@@ -1373,34 +1547,34 @@ export default function Dashboard() {
                       {leaderboardTab === 'lc_contest' && 'Rank'}
                       {leaderboardTab === 'cf_contest' && 'Rank'}
                     </div>
-                    <div className="text-base font-black text-brand-700">
+                    <div className="text-base font-black text-brand-700 dark:text-brand-300">
                       {leaderboardTab === 'streak' && (
-                        <span className="text-orange-600 flex items-center justify-end gap-1">
+                        <span className="text-orange-600 dark:text-orange-400 flex items-center justify-end gap-1">
                           {myEntry.current_streak || 0} 🔥
                         </span>
                       )}
                       {leaderboardTab === 'lc_rating' && (
-                        <span className="text-amber-600">
+                        <span className="text-amber-600 dark:text-amber-400">
                           {myEntry.lc_rating ? Math.round(myEntry.lc_rating) : '—'}
                         </span>
                       )}
                       {leaderboardTab === 'cf_rating' && (
-                        <span className="text-blue-600">
+                        <span className={showRatingColors ? getCFRatingTier(myEntry.cf_rating).colorClass : 'text-surface-900 dark:text-surface-100'}>
                           {myEntry.cf_rating || '—'}
                         </span>
                       )}
                       {leaderboardTab === 'total_solved' && (
-                        <span className="text-emerald-600">
+                        <span className="text-emerald-600 dark:text-emerald-400">
                           {(myEntry.lc_total_solved || 0) + (myEntry.cf_total_solved || 0)}
                         </span>
                       )}
                       {leaderboardTab === 'lc_contest' && (
-                        <span className="text-amber-600">
+                        <span className="text-amber-600 dark:text-amber-400">
                           {myEntry.lc_latest_contest_rank ? `#${myEntry.lc_latest_contest_rank.toLocaleString()}` : '—'}
                         </span>
                       )}
                       {leaderboardTab === 'cf_contest' && (
-                        <span className="text-blue-600">
+                        <span className="text-blue-600 dark:text-blue-400">
                           {myEntry.cf_latest_contest_rank ? `#${myEntry.cf_latest_contest_rank.toLocaleString()}` : '—'}
                         </span>
                       )}
@@ -1408,7 +1582,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-surface-50 border border-surface-200 rounded-xl p-2.5 mb-3 text-xs text-surface-500 flex items-center justify-between">
+                <div className="bg-surface-50 dark:bg-surface-850 border border-surface-200 dark:border-surface-800 rounded-xl p-2.5 mb-3 text-xs text-surface-500 dark:text-surface-400 flex items-center justify-between">
                   <span className="font-medium">
                     {leaderboardYearFilter !== 'all'
                       ? `Your Ranking: You are in Year ${profile?.year || 'N/A'} (Filtered: Year ${leaderboardYearFilter})`
@@ -1422,13 +1596,13 @@ export default function Dashboard() {
 
               {/* Contest Info Banner (when on LC Contest or CF Contest tabs) */}
               {leaderboardTab === 'lc_contest' && (
-                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm text-xs">
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 border border-amber-200/80 dark:border-amber-800/80 rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm text-xs">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">
                         LeetCode Contest
                       </span>
-                      <span className="text-[10px] font-semibold text-amber-700 bg-amber-200/60 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-200/60 dark:bg-amber-900/60 px-1.5 py-0.5 rounded">
                         {selectedLCContest === 'latest' ? 'Most Recent Available' : selectedLCContest === 'all' ? 'All Recent' : 'Selected Contest'}
                       </span>
                     </div>
@@ -1440,7 +1614,7 @@ export default function Dashboard() {
                             setSelectedLCContest(e.target.value);
                             setLeaderboardPage(1);
                           }}
-                          className="font-bold text-surface-900 bg-white border border-amber-300 rounded-lg px-2.5 py-1 text-xs focus:ring-2 focus:ring-amber-400 outline-none cursor-pointer max-w-full sm:max-w-md shadow-xs"
+                          className="font-bold text-surface-900 dark:text-surface-100 bg-white dark:bg-surface-800 border border-amber-300 dark:border-amber-700 rounded-lg px-2.5 py-1 text-xs focus:ring-2 focus:ring-amber-400 outline-none cursor-pointer max-w-full sm:max-w-md shadow-xs"
                         >
                           <option value="latest">⚡ Most Recent: {mostRecentAvailableLCContest}</option>
                           <option value="all">🌐 All Recent (Every Member&apos;s Latest)</option>
@@ -1454,24 +1628,24 @@ export default function Dashboard() {
                         </select>
                       </div>
                     ) : (
-                      <h4 className="font-bold text-surface-900 truncate mt-1">{activeLCContest}</h4>
+                      <h4 className="font-bold text-surface-900 dark:text-surface-100 truncate mt-1">{activeLCContest}</h4>
                     )}
                   </div>
-                  <div className="bg-white/90 border border-amber-200/60 rounded-lg px-2.5 py-1 text-right shrink-0 self-start sm:self-center">
+                  <div className="bg-white/90 dark:bg-surface-850/90 border border-amber-200/60 dark:border-amber-800/60 rounded-lg px-2.5 py-1 text-right shrink-0 self-start sm:self-center">
                     <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
-                    <div className="text-sm font-black text-amber-600">{lcParticipantsCount} members</div>
+                    <div className="text-sm font-black text-amber-600 dark:text-amber-400">{lcParticipantsCount} members</div>
                   </div>
                 </div>
               )}
 
               {leaderboardTab === 'cf_contest' && (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm text-xs">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200/80 dark:border-blue-800/80 rounded-xl p-3 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm text-xs">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-100/80 dark:bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-200/60 dark:border-blue-800/60">
                         Codeforces Contest
                       </span>
-                      <span className="text-[10px] font-semibold text-blue-700 bg-blue-200/60 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-200/60 dark:bg-blue-900/60 px-1.5 py-0.5 rounded">
                         {selectedCFContest === 'latest' ? 'Most Recent Available' : selectedCFContest === 'all' ? 'All Recent' : 'Selected Contest'}
                       </span>
                     </div>
@@ -1483,7 +1657,7 @@ export default function Dashboard() {
                             setSelectedCFContest(e.target.value);
                             setLeaderboardPage(1);
                           }}
-                          className="font-bold text-surface-900 bg-white border border-blue-300 rounded-lg px-2.5 py-1 text-xs focus:ring-2 focus:ring-blue-400 outline-none cursor-pointer max-w-full sm:max-w-md shadow-xs truncate"
+                          className="font-bold text-surface-900 dark:text-surface-100 bg-white dark:bg-surface-800 border border-blue-300 dark:border-blue-700 rounded-lg px-2.5 py-1 text-xs focus:ring-2 focus:ring-blue-400 outline-none cursor-pointer max-w-full sm:max-w-md shadow-xs truncate"
                         >
                           <option value="latest">⚡ Most Recent: {mostRecentAvailableCFContest}</option>
                           <option value="all">🌐 All Recent (Every Member&apos;s Latest)</option>
@@ -1497,21 +1671,21 @@ export default function Dashboard() {
                         </select>
                       </div>
                     ) : (
-                      <h4 className="font-bold text-surface-900 truncate mt-1">{activeCFContest}</h4>
+                      <h4 className="font-bold text-surface-900 dark:text-surface-100 truncate mt-1">{activeCFContest}</h4>
                     )}
                   </div>
-                  <div className="bg-white/90 border border-blue-200/60 rounded-lg px-2.5 py-1 text-right shrink-0 self-start sm:self-center">
+                  <div className="bg-white/90 dark:bg-surface-850/90 border border-blue-200/60 dark:border-blue-800/60 rounded-lg px-2.5 py-1 text-right shrink-0 self-start sm:self-center">
                     <div className="text-[9px] font-bold uppercase text-surface-400">Turnout</div>
-                    <div className="text-sm font-black text-blue-600">{cfParticipantsCount} members</div>
+                    <div className="text-sm font-black text-blue-600 dark:text-blue-400">{cfParticipantsCount} members</div>
                   </div>
                 </div>
               )}
 
               {/* Leaderboard Table with 5 participants at a time */}
-              <div className="border border-surface-200 rounded-xl overflow-hidden bg-white">
+              <div className="border border-surface-200 dark:border-surface-800 rounded-xl overflow-hidden bg-white dark:bg-surface-900">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
-                    <thead className="bg-surface-100/80 text-surface-600 font-semibold uppercase text-[11px] tracking-wider border-b border-surface-200">
+                    <thead className="bg-surface-100/80 dark:bg-surface-800/80 text-surface-600 dark:text-surface-300 font-semibold uppercase text-[11px] tracking-wider border-b border-surface-200 dark:border-surface-700">
                       <tr>
                         <th className="py-2.5 px-3 w-10 text-center">#</th>
                         <th className="py-2.5 px-3">Name</th>
@@ -1554,12 +1728,12 @@ export default function Dashboard() {
                         )}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-surface-200/80">
+                    <tbody className="divide-y divide-surface-200/80 dark:divide-surface-800">
                       {sortedLeaderboard.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-4 py-12 text-center text-surface-400">
-                            <Trophy className="w-8 h-8 text-surface-300 mx-auto mb-2" />
-                            <p className="font-semibold text-surface-700 text-sm">No leaderboard data found</p>
+                            <Trophy className="w-8 h-8 text-surface-300 dark:text-surface-600 mx-auto mb-2" />
+                            <p className="font-semibold text-surface-700 dark:text-surface-200 text-sm">No leaderboard data found</p>
                             <p className="text-xs text-surface-400 mt-1">
                               {leaderboardYearFilter !== 'all'
                                 ? `No participants found from Year ${leaderboardYearFilter} for this category.`
@@ -1573,36 +1747,44 @@ export default function Dashboard() {
                         paginatedLeaderboard.map((entry, index) => {
                           const actualRank = (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + index;
                           const isMe = entry.user_id === profile?.id;
+                          const tier = getLeaderboardTier(leaderboardTab, entry);
+                          const cfTier = getCFRatingTier(entry.cf_rating);
+                          const cfMaxTier = getCFRatingTier(entry.cf_max_rating);
+
                           return (
                             <tr
                               key={entry.user_id}
-                              className={`hover:bg-surface-50 transition-colors ${isMe ? 'bg-brand-50/50 font-semibold' : ''}`}
+                              className={`hover:bg-surface-50 dark:hover:bg-surface-850/60 transition-colors ${isMe ? 'bg-brand-50/50 dark:bg-brand-950/40 font-semibold' : ''}`}
                             >
                               <td className="py-2.5 px-3 text-center text-xs">
                                 {actualRank === 0 ? '🥇' : actualRank === 1 ? '🥈' : actualRank === 2 ? '🥉' : (
-                                  <span className="text-surface-400 font-bold">{actualRank + 1}</span>
+                                  <span className="text-surface-400 dark:text-surface-500 font-bold">{actualRank + 1}</span>
                                 )}
                               </td>
-                              <td className="py-2.5 px-3 font-medium text-surface-900 truncate max-w-[140px]">
+                              <td className="py-2.5 px-3 font-medium truncate max-w-[140px]">
                                 <Link
                                   href={`/profile?id=${entry.user_id}`}
-                                  className="hover:text-brand-600 hover:underline transition-colors inline-block max-w-[110px] truncate align-middle cursor-pointer"
-                                  title={`View ${entry.user?.full_name}'s profile`}
+                                  className="hover:underline transition-colors inline-block max-w-[110px] truncate align-middle cursor-pointer"
+                                  title={`${entry.user?.full_name} • ${tier.label}${tier.rating ? ` (${tier.rating})` : ''}`}
                                 >
-                                  {entry.user?.full_name}
+                                  <RatingColoredName
+                                    name={entry.user?.full_name || 'Anonymous'}
+                                    tier={tier}
+                                    enabled={showRatingColors}
+                                  />
                                 </Link>
                                 {isMe && (
-                                  <span className="ml-1.5 text-[9px] font-bold bg-brand-100 text-brand-700 px-1 py-0.2 rounded align-middle">YOU</span>
+                                  <span className="ml-1.5 text-[9px] font-bold bg-brand-100 dark:bg-brand-950 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 px-1 py-0.2 rounded align-middle">YOU</span>
                                 )}
                               </td>
-                              <td className="py-2.5 px-2 text-center text-xs text-surface-500">
+                              <td className="py-2.5 px-2 text-center text-xs text-surface-500 dark:text-surface-400">
                                 {entry.user?.year === 'Alumni' ? '🎓' : entry.user?.year}
                               </td>
 
                               {leaderboardTab === 'streak' && (
                                 <>
                                   <td className="py-2.5 px-3 text-right">
-                                    <span className={`font-bold ${(entry.current_streak || 0) > 0 ? 'text-orange-600' : 'text-surface-400'}`}>
+                                    <span className={`font-bold ${(entry.current_streak || 0) > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-surface-400'}`}>
                                       {entry.current_streak || 0} {(entry.current_streak || 0) > 0 ? '🔥' : ''}
                                     </span>
                                   </td>
@@ -1613,31 +1795,41 @@ export default function Dashboard() {
                               )}
 
                               {leaderboardTab === 'lc_rating' && (
-                                <td className="py-2.5 px-3 text-right font-bold text-amber-600">
+                                <td className="py-2.5 px-3 text-right font-bold text-amber-600 dark:text-amber-400">
                                   {entry.lc_rating ? Math.round(entry.lc_rating) : '—'}
                                 </td>
                               )}
 
                               {leaderboardTab === 'cf_rating' && (
                                 <>
-                                  <td className="py-2.5 px-3 text-right font-bold text-blue-600">
-                                    {entry.cf_rating || '—'}
+                                  <td className="py-2.5 px-3 text-right font-bold">
+                                    <span
+                                      className={showRatingColors ? cfTier.colorClass : 'text-surface-900 dark:text-surface-100'}
+                                      title={cfTier.label}
+                                    >
+                                      {entry.cf_rating || '—'}
+                                    </span>
                                   </td>
                                   <td className="py-2.5 px-3 text-right font-bold text-surface-400 text-xs">
-                                    {entry.cf_max_rating || '—'}
+                                    <span
+                                      className={showRatingColors ? cfMaxTier.colorClass : 'text-surface-400 dark:text-surface-500'}
+                                      title={`Max: ${cfMaxTier.label}`}
+                                    >
+                                      {entry.cf_max_rating || '—'}
+                                    </span>
                                   </td>
                                 </>
                               )}
 
                               {leaderboardTab === 'total_solved' && (
                                 <>
-                                  <td className="py-2.5 px-2 text-right font-semibold text-amber-600 text-xs">
+                                  <td className="py-2.5 px-2 text-right font-semibold text-amber-600 dark:text-amber-400 text-xs">
                                     {entry.lc_total_solved || 0}
                                   </td>
-                                  <td className="py-2.5 px-2 text-right font-semibold text-blue-600 text-xs">
+                                  <td className="py-2.5 px-2 text-right font-semibold text-blue-600 dark:text-blue-400 text-xs">
                                     {entry.cf_total_solved || 0}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right font-black text-emerald-600">
+                                  <td className="py-2.5 px-3 text-right font-black text-emerald-600 dark:text-emerald-400">
                                     {(entry.lc_total_solved || 0) + (entry.cf_total_solved || 0)}
                                   </td>
                                 </>
@@ -1645,13 +1837,13 @@ export default function Dashboard() {
 
                               {leaderboardTab === 'lc_contest' && (
                                 <>
-                                  <td className="py-2.5 px-3 text-xs text-surface-600 max-w-[120px] truncate" title={entry.lc_latest_contest_name}>
+                                  <td className="py-2.5 px-3 text-xs text-surface-600 dark:text-surface-300 max-w-[120px] truncate" title={entry.lc_latest_contest_name}>
                                     {entry.lc_latest_contest_name || '—'}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right font-bold text-amber-600 text-xs">
+                                  <td className="py-2.5 px-3 text-right font-bold text-amber-600 dark:text-amber-400 text-xs">
                                     {entry.lc_latest_contest_rank?.toLocaleString() || '—'}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right font-bold text-emerald-600 text-xs">
+                                  <td className="py-2.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400 text-xs">
                                     {entry.lc_latest_contest_solved ?? '—'}
                                   </td>
                                 </>
@@ -1659,13 +1851,13 @@ export default function Dashboard() {
 
                               {leaderboardTab === 'cf_contest' && (
                                 <>
-                                  <td className="py-2.5 px-3 text-xs text-surface-600 max-w-[120px] truncate" title={entry.cf_latest_contest_name}>
+                                  <td className="py-2.5 px-3 text-xs text-surface-600 dark:text-surface-300 max-w-[120px] truncate" title={entry.cf_latest_contest_name}>
                                     {entry.cf_latest_contest_name || '—'}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right font-bold text-blue-600 text-xs">
+                                  <td className="py-2.5 px-3 text-right font-bold text-blue-600 dark:text-blue-400 text-xs">
                                     {entry.cf_latest_contest_rank?.toLocaleString() || '—'}
                                   </td>
-                                  <td className="py-2.5 px-3 text-right font-bold text-emerald-600 text-xs">
+                                  <td className="py-2.5 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400 text-xs">
                                     {entry.cf_latest_contest_rating || '—'}
                                   </td>
                                 </>
@@ -1679,8 +1871,8 @@ export default function Dashboard() {
                 </div>
 
                 {/* Slider / Pagination Footer for Leaderboard */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 border-t border-surface-200">
-                  <span className="text-xs text-surface-500 font-medium order-2 sm:order-1">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 dark:bg-surface-850/70 border-t border-surface-200 dark:border-surface-800">
+                  <span className="text-xs text-surface-500 dark:text-surface-400 font-medium order-2 sm:order-1">
                     Showing {sortedLeaderboard.length === 0 ? 0 : (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + 1}–{Math.min(safeLeaderboardPage * LEADERBOARD_PER_PAGE, sortedLeaderboard.length)} of {sortedLeaderboard.length} participants
                   </span>
 
@@ -1688,7 +1880,7 @@ export default function Dashboard() {
                     <button
                       onClick={() => setLeaderboardPage(p => Math.max(1, p - 1))}
                       disabled={safeLeaderboardPage <= 1}
-                      className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                      className="p-1 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 dark:text-surface-300 transition-all shadow-sm"
                       title="Previous page"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -1701,18 +1893,18 @@ export default function Dashboard() {
                       value={safeLeaderboardPage}
                       onChange={(e) => setLeaderboardPage(Number(e.target.value))}
                       disabled={totalLeaderboardPages <= 1}
-                      className="w-20 accent-brand-600 h-1.5 bg-surface-200 rounded-lg cursor-pointer disabled:opacity-40"
+                      className="w-20 accent-brand-600 h-1.5 bg-surface-200 dark:bg-surface-700 rounded-lg cursor-pointer disabled:opacity-40"
                       title="Slide through participants"
                     />
 
-                    <span className="text-xs font-semibold text-surface-700 min-w-[50px] text-center">
+                    <span className="text-xs font-semibold text-surface-700 dark:text-surface-200 min-w-[50px] text-center">
                       {safeLeaderboardPage} / {totalLeaderboardPages}
                     </span>
 
                     <button
                       onClick={() => setLeaderboardPage(p => Math.min(totalLeaderboardPages, p + 1))}
                       disabled={safeLeaderboardPage >= totalLeaderboardPages}
-                      className="p-1 rounded-lg border border-surface-200 bg-white hover:bg-surface-100 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 transition-all shadow-sm"
+                      className="p-1 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 disabled:opacity-40 disabled:cursor-not-allowed text-surface-600 dark:text-surface-300 transition-all shadow-sm"
                       title="Next page"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -1721,7 +1913,7 @@ export default function Dashboard() {
                 </div>
 
                 {leaderboardData[0]?.synced_at && (
-                  <div className="px-4 py-2 bg-surface-50/50 text-[11px] text-surface-400 border-t border-surface-100 flex items-center justify-between">
+                  <div className="px-4 py-2 bg-surface-50/50 dark:bg-surface-850/50 text-[11px] text-surface-400 dark:text-surface-500 border-t border-surface-100 dark:border-surface-800 flex items-center justify-between">
                     <span>Last synced: {new Date(leaderboardData[0].synced_at).toLocaleString()}</span>
                   </div>
                 )}
@@ -1782,19 +1974,39 @@ export default function Dashboard() {
                     <li
                       key={m.id}
                       onClick={() => setSelectedMentee(m)}
-                      className="flex items-center justify-between p-3 rounded-xl bg-surface-50/70 border border-surface-200 hover:border-brand-300 hover:bg-brand-50/40 cursor-pointer transition-all group"
+                      className="flex items-center justify-between p-3.5 rounded-xl bg-surface-50/70 dark:bg-surface-850/70 border border-surface-200 dark:border-surface-800 hover:border-brand-300 dark:hover:border-brand-700 hover:bg-brand-50/40 dark:hover:bg-brand-950/40 cursor-pointer transition-all group shadow-2xs"
                     >
-                      <div className="min-w-0 pr-2">
-                        <div className="font-bold text-surface-900 group-hover:text-brand-700 transition-colors text-sm truncate">
-                          {m.full_name}
+                      <div className="min-w-0 pr-3">
+                        <div className="font-bold text-surface-900 dark:text-surface-100 group-hover:text-brand-700 dark:group-hover:text-brand-300 transition-colors text-sm truncate flex items-center gap-2">
+                          <span>{m.full_name}</span>
+                          {menteeStats[m.id]?.hasAlert && (
+                            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 px-1.5 py-0.2 rounded">
+                              Inactive
+                            </span>
+                          )}
                         </div>
-                        <div className="text-xs text-surface-500 truncate">
-                          {m.email} &bull; Year {m.year}
+                        <div className="text-xs text-surface-500 dark:text-surface-400 truncate mt-0.5">
+                          {m.email} • Year {m.year}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        {/* Progress Stats Badge */}
+                        <div className="text-right">
+                          <div className="text-xs font-bold text-surface-900 dark:text-surface-100">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-black">
+                              {menteeStats[m.id]?.totalCompleted || 0}
+                            </span>
+                            <span className="text-surface-400 dark:text-surface-500 font-normal"> / </span>
+                            <span>{menteeStats[m.id]?.totalAssigned || 0}</span>
+                          </div>
+                          <div className="text-[10px] text-surface-400 dark:text-surface-500 font-medium">
+                            done
+                          </div>
+                        </div>
+
                         {menteeStats[m.id]?.hasAlert && (
-                          <div className="bg-red-100 text-red-600 p-1.5 rounded-lg" title="Inactive for > 48 hours">
+                          <div className="bg-red-100 dark:bg-red-950/80 text-red-600 dark:text-red-400 p-1.5 rounded-lg" title="Inactive for > 48 hours">
                             <AlertCircle className="w-4 h-4" />
                           </div>
                         )}
@@ -1803,7 +2015,7 @@ export default function Dashboard() {
                             e.stopPropagation();
                             handleRemoveMentee(m.id, m.full_name);
                           }}
-                          className="p-1.5 rounded-lg text-surface-300 hover:text-red-600 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"
+                          className="p-1.5 rounded-lg text-surface-300 dark:text-surface-600 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-all opacity-0 group-hover:opacity-100"
                           title={`Remove ${m.full_name} from cohort`}
                         >
                           <X className="w-4 h-4" />
@@ -1819,30 +2031,30 @@ export default function Dashboard() {
 
 
         {/* --- BOTTOM SECTION: MENTORSHIP MANAGEMENT --- */}
-        <section className="animate-fade-in pt-8 border-t border-surface-200" style={{ animationDelay: '0.3s' }}>
+        <section className="animate-fade-in pt-8 border-t border-surface-200 dark:border-surface-800" style={{ animationDelay: '0.3s' }}>
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
+            <div className="p-2 bg-purple-100 dark:bg-purple-950/80 rounded-lg text-purple-600 dark:text-purple-300">
               <UserPlus className="w-5 h-5" />
             </div>
-            <h2 className="text-2xl font-bold text-surface-900">Mentorship Management</h2>
+            <h2 className="text-2xl font-bold text-surface-900 dark:text-surface-100">Mentorship Management</h2>
           </div>
 
           {/* Incoming Mentorship Requests for this Mentor */}
           {incomingRequests.length > 0 && (
-            <div id="incoming-requests" className="card p-6 border-amber-300 border-2 bg-gradient-to-r from-amber-50/60 via-white to-amber-50/30 mb-8 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5 pb-3 border-b border-amber-200">
+            <div id="incoming-requests" className="card p-6 border-amber-300 dark:border-amber-800/80 border-2 bg-gradient-to-r from-amber-50/60 via-white to-amber-50/30 dark:from-amber-950/40 dark:via-surface-900 dark:to-amber-950/20 mb-8 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5 pb-3 border-b border-amber-200 dark:border-amber-800/80">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-amber-100 rounded-xl text-amber-700 shadow-xs">
+                  <div className="p-2.5 bg-amber-100 dark:bg-amber-950/80 rounded-xl text-amber-700 dark:text-amber-300 shadow-xs">
                     <UserPlus className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-surface-900 flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-surface-900 dark:text-surface-100 flex items-center gap-2">
                       Incoming Mentorship Requests
-                      <span className="bg-amber-100 text-amber-900 text-xs font-black px-2.5 py-0.5 rounded-full border border-amber-300">
+                      <span className="bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 text-xs font-black px-2.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
                         {incomingRequests.length} pending
                       </span>
                     </h3>
-                    <p className="text-xs text-surface-500 mt-0.5">
+                    <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
                       Students who want you as their mentor. Review their details and accept or decline.
                     </p>
                   </div>
@@ -1859,30 +2071,30 @@ export default function Dashboard() {
                   return (
                     <div
                       key={req.id}
-                      className="bg-white rounded-xl border border-surface-200 p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-shadow"
+                      className="bg-white dark:bg-surface-850 rounded-xl border border-surface-200 dark:border-surface-700 p-4 flex flex-col justify-between shadow-xs hover:shadow-md transition-shadow"
                     >
                       <div>
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <h4 className="font-bold text-surface-900 text-base leading-snug truncate">
+                            <h4 className="font-bold text-surface-900 dark:text-surface-100 text-base leading-snug truncate">
                               <Link
                                 href={`/profile?id=${m?.id}`}
-                                className="hover:text-brand-600 hover:underline transition-colors"
+                                className="hover:text-brand-600 dark:hover:text-brand-400 hover:underline transition-colors"
                                 title="View student profile"
                               >
                                 {m?.full_name || 'Prospective Mentee'}
                               </Link>
                             </h4>
-                            <p className="text-xs text-surface-500 mt-0.5">
+                            <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
                               Year {m?.year || 'N/A'}{m?.branch ? ` • ${m.branch}` : ''}
                             </p>
                           </div>
-                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shrink-0">
                             Pending
                           </span>
                         </div>
 
-                        <div className="text-xs text-surface-500 mt-2 truncate">
+                        <div className="text-xs text-surface-500 dark:text-surface-400 mt-2 truncate">
                           {m?.email}
                         </div>
                         {m?.roll_number && (
@@ -1892,13 +2104,13 @@ export default function Dashboard() {
                         )}
 
                         {/* Coding Profile Badges */}
-                        <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-surface-100">
+                        <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-surface-100 dark:border-surface-800">
                           {lcUrl ? (
                             <a
                               href={lcUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 px-2 py-1 rounded-md border border-amber-200 transition-colors"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-1 rounded-md border border-amber-200 dark:border-amber-800/80 transition-colors"
                               title={`LeetCode: ${cleanLeetCodeHandle(m?.lc_handle)}`}
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
@@ -1914,7 +2126,7 @@ export default function Dashboard() {
                               href={cfUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-50 text-blue-800 hover:bg-blue-100 px-2 py-1 rounded-md border border-blue-200 transition-colors"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-2 py-1 rounded-md border border-blue-200 dark:border-blue-800/80 transition-colors"
                               title={`Codeforces: ${cleanCodeforcesHandle(m?.cf_handle)}`}
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
@@ -1928,7 +2140,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* Accept & Decline Buttons */}
-                      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-surface-100">
+                      <div className="flex items-center gap-2 mt-4 pt-3 border-t border-surface-100 dark:border-surface-800">
                         <button
                           onClick={() => handleAcceptMenteeRequest(req.id, req.mentee_id, m?.full_name || 'student')}
                           disabled={isActioning}
@@ -1944,7 +2156,7 @@ export default function Dashboard() {
                         <button
                           onClick={() => handleDeclineMenteeRequest(req.id, m?.full_name || 'student')}
                           disabled={isActioning}
-                          className="btn-secondary py-1.5 px-3 text-xs text-surface-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                          className="btn-secondary py-1.5 px-3 text-xs text-surface-600 dark:text-surface-300 hover:text-red-600 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800/80 hover:bg-red-50 dark:hover:bg-red-950/40 font-medium rounded-lg flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                         >
                           <X className="w-3.5 h-3.5" />
                           Decline
@@ -1962,17 +2174,17 @@ export default function Dashboard() {
             {/* Request Mentor */}
             <div className="card p-6 flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-bold text-surface-900 mb-1">Request a Mentor</h3>
-                <p className="text-xs text-surface-500 mb-4">
+                <h3 className="text-lg font-bold text-surface-900 dark:text-surface-100 mb-1">Request a Mentor</h3>
+                <p className="text-xs text-surface-500 dark:text-surface-400 mb-4">
                   Requests go directly to the mentor to accept or decline.
                 </p>
 
                 {myMentors.length > 0 && (
-                  <div className="mb-4 rounded-lg border border-purple-100 bg-purple-50/60 px-3 py-2.5">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-700 mb-2">Your mentors</p>
+                  <div className="mb-4 rounded-lg border border-purple-100 dark:border-purple-900/60 bg-purple-50/60 dark:bg-purple-950/40 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 mb-2">Your mentors</p>
                     <ul className="flex flex-wrap gap-2">
                       {myMentors.map((mentor) => (
-                        <li key={mentor.id} className="rounded-full bg-white border border-purple-100 px-3 py-1 text-xs font-medium text-surface-800">
+                        <li key={mentor.id} className="rounded-full bg-white dark:bg-surface-800 border border-purple-100 dark:border-purple-900/60 px-3 py-1 text-xs font-medium text-surface-800 dark:text-surface-200">
                           {mentor.full_name}
                         </li>
                       ))}
@@ -2000,21 +2212,21 @@ export default function Dashboard() {
                 </form>
 
                 {pendingRequests.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-surface-100">
-                    <p className="text-xs font-semibold text-surface-500 uppercase mb-2">Pending Requests</p>
+                  <div className="mt-4 pt-4 border-t border-surface-100 dark:border-surface-800">
+                    <p className="text-xs font-semibold text-surface-500 dark:text-surface-400 uppercase mb-2">Pending Requests</p>
                     <ul className="space-y-2">
                       {pendingRequests.map(r => (
-                        <li key={r.id} className="flex items-center justify-between gap-2 text-sm text-surface-600 bg-surface-50 p-2.5 rounded-lg border border-surface-200">
+                        <li key={r.id} className="flex items-center justify-between gap-2 text-sm text-surface-600 dark:text-surface-300 bg-surface-50 dark:bg-surface-850 p-2.5 rounded-lg border border-surface-200 dark:border-surface-800">
                           <div className="flex items-center gap-2 truncate pr-2">
                             <Clock className="w-4 h-4 text-amber-500 shrink-0" />
                             <span className="truncate">
-                              Waiting for <span className="font-semibold text-surface-900">{r.mentor?.full_name || 'mentor'}</span> to accept your request
+                              Waiting for <span className="font-semibold text-surface-900 dark:text-surface-100">{r.mentor?.full_name || 'mentor'}</span> to accept your request
                             </span>
                           </div>
                           <button
                             onClick={() => handleCancelMyRequest(r.id)}
                             disabled={requestActionLoadingId === r.id}
-                            className="text-xs text-red-600 hover:text-red-700 font-semibold px-2 py-1 rounded hover:bg-red-50 transition-colors shrink-0 disabled:opacity-50"
+                            className="text-xs text-red-600 hover:text-red-700 font-semibold px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors shrink-0 disabled:opacity-50"
                             title="Cancel request"
                           >
                             {requestActionLoadingId === r.id ? 'Cancelling...' : 'Cancel'}
@@ -2028,15 +2240,15 @@ export default function Dashboard() {
             </div>
 
             {/* Assign or Schedule Tasks */}
-            <div className="card p-6 border-brand-200 border-2 bg-brand-50/30 flex flex-col">
+            <div className="card p-6 border-brand-200 dark:border-brand-800/80 border-2 bg-brand-50/30 dark:bg-brand-950/20 flex flex-col">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-2">
                 <div>
-                  <h3 className="text-lg font-bold text-surface-900">Assign or Schedule Question</h3>
-                  <p className="text-xs text-surface-500 mt-0.5">
+                  <h3 className="text-lg font-bold text-surface-900 dark:text-surface-100">Assign or Schedule Question</h3>
+                  <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
                     Paste a link to assign immediately or schedule up to a month in advance. Scheduled questions roll out automatically on that day upon first visit.
                   </p>
                 </div>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-100 text-brand-800 border border-brand-200 shrink-0">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-100 dark:bg-brand-950 text-brand-800 dark:text-brand-300 border border-brand-200 dark:border-brand-800 shrink-0">
                   <Clock className="w-3 h-3 text-brand-600" /> Auto-sync: Daily on First Visit (IST)
                 </span>
               </div>
@@ -2044,19 +2256,19 @@ export default function Dashboard() {
               <form onSubmit={handleAssignTask} className="space-y-4 mt-2">
                 {/* Common Mentor / Admin Target Audience Selector */}
                 {isCommonMentorOrAdmin && (
-                  <div className="space-y-1.5 p-3 rounded-xl bg-purple-50/70 border border-purple-200">
+                  <div className="space-y-1.5 p-3 rounded-xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-purple-600" /> Target Audience (Common Mentor)
+                      <label className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" /> Target Audience (Common Mentor)
                       </label>
-                      <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full border border-purple-200">
+                      <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800">
                         Year-Wide Assignment
                       </span>
                     </div>
                     <select
                       value={targetYear}
                       onChange={(e) => setTargetYear(e.target.value)}
-                      className="w-full text-xs border border-purple-200 rounded-lg px-2.5 py-2 bg-white text-surface-800 font-medium focus:outline-purple-500 shadow-2xs"
+                      className="w-full text-xs border border-purple-200 dark:border-purple-800 rounded-lg px-2.5 py-2 bg-white dark:bg-surface-850 text-surface-800 dark:text-surface-100 font-medium focus:outline-purple-500 shadow-2xs"
                     >
                       <option value="">My Mentees Cohort ({myMentees.length} mentees)</option>
                       <option value="1">All 1st Year Students ({yearCounts['1'] || 0} students)</option>
@@ -2065,7 +2277,7 @@ export default function Dashboard() {
                       <option value="4">All 4th Year Students ({yearCounts['4'] || 0} students)</option>
                       <option value="all">All Students Across All Years ({yearCounts.all || 0} students)</option>
                     </select>
-                    <p className="text-[11px] text-purple-700">
+                    <p className="text-[11px] text-purple-700 dark:text-purple-300">
                       {targetYear
                         ? `Assigns to all approved students in ${targetYear === 'all' ? 'all years' : 'Year ' + targetYear} regardless of mentor-mentee mapping.`
                         : 'Default: Assigns to your personally accepted cohort mentees.'}
@@ -2074,7 +2286,7 @@ export default function Dashboard() {
                 )}
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Problem or Video Link</label>
+                  <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">Problem or Video Link</label>
                   <div className="relative">
                     <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
                     <input
@@ -2082,7 +2294,7 @@ export default function Dashboard() {
                       placeholder="https://leetcode.com/... or https://cses.fi/problemset/task/1068 or youtu.be/..."
                       value={taskLink}
                       onChange={(e) => setTaskLink(e.target.value)}
-                      className="input-field pl-10 bg-white"
+                      className="input-field pl-10 bg-white dark:bg-surface-850"
                       required
                       disabled={!isCommonMentorOrAdmin && myMentees.length === 0}
                     />
@@ -2090,28 +2302,28 @@ export default function Dashboard() {
                 </div>
 
                 {/* Rollout Date Selector (Next 30 Days) */}
-                <div className="space-y-2.5 bg-white/80 p-3.5 rounded-xl border border-brand-100 shadow-2xs">
+                <div className="space-y-2.5 bg-white/80 dark:bg-surface-850/80 p-3.5 rounded-xl border border-brand-100 dark:border-brand-900/60 shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-surface-800 flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-brand-600" /> Rollout Schedule (Next 30 Days)
+                    <label className="text-xs font-bold text-surface-800 dark:text-surface-200 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" /> Rollout Schedule (Next 30 Days)
                     </label>
                     <div
-                      className="inline-flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-lg bg-surface-100/90 text-surface-700 border border-surface-200 select-none shadow-2xs"
+                      className="inline-flex items-center gap-1.5 text-xs font-mono font-medium px-2.5 py-1 rounded-lg bg-surface-100/90 dark:bg-surface-800/90 text-surface-700 dark:text-surface-300 border border-surface-200 dark:border-surface-700 select-none shadow-2xs"
                       title="Selected rollout date (use dropdown or quick chips below to change)"
                     >
-                      <Calendar className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+                      <Calendar className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400 shrink-0" />
                       <span>{formattedSelectedDateDisplay}</span>
                     </div>
                   </div>
 
                   {/* Bounded Dropdown Selector (Next 30 Days) */}
                   <div className="flex items-center gap-2">
-                    <label className="text-[11px] font-semibold text-surface-600 shrink-0">Select Date:</label>
+                    <label className="text-[11px] font-semibold text-surface-600 dark:text-surface-400 shrink-0">Select Date:</label>
                     <select
                       value={selectedScheduleDate}
                       onChange={(e) => setSelectedScheduleDate(e.target.value)}
                       disabled={!isCommonMentorOrAdmin && myMentees.length === 0}
-                      className="w-full text-xs border border-surface-200 rounded-lg px-2.5 py-1.5 bg-white font-mono text-surface-800 focus:outline-brand-500 shadow-2xs"
+                      className="w-full text-xs border border-surface-200 dark:border-surface-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-surface-850 font-mono text-surface-800 dark:text-surface-100 focus:outline-brand-500 shadow-2xs"
                     >
                       {allMonthDays.map((d) => (
                         <option key={d.date} value={d.date}>
@@ -2134,7 +2346,7 @@ export default function Dashboard() {
                           className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
                             isSelected
                               ? 'bg-brand-600 text-white shadow-xs font-bold'
-                              : 'bg-white hover:bg-brand-50 text-surface-700 border border-surface-200'
+                              : 'bg-white dark:bg-surface-800 hover:bg-brand-50 dark:hover:bg-surface-700 text-surface-700 dark:text-surface-300 border border-surface-200 dark:border-surface-700'
                           }`}
                           title={d.fullLabel}
                         >
@@ -2145,13 +2357,13 @@ export default function Dashboard() {
                   </div>
 
                   {/* Informational rollout helper */}
-                  <div className="text-[11px] text-surface-500 pt-1">
+                  <div className="text-[11px] text-surface-500 dark:text-surface-400 pt-1">
                     {selectedScheduleDate === todayIST ? (
-                      <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                      <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                         ⚡ Assigning for <strong>Today</strong> — will roll out immediately.
                       </span>
                     ) : (
-                      <span className="text-amber-800 font-medium flex items-center gap-1">
+                      <span className="text-amber-800 dark:text-amber-400 font-medium flex items-center gap-1">
                         ⏰ Scheduled for <strong>{formatScheduledDateLabel(selectedScheduleDate, todayIST)}</strong> — will roll out automatically to all assigned students on that day upon first visit.
                       </span>
                     )}
@@ -2176,19 +2388,19 @@ export default function Dashboard() {
                   )}
                 </button>
                 {!isCommonMentorOrAdmin && myMentees.length === 0 && (
-                  <p className="text-xs text-amber-600 text-center font-medium mt-2">
+                  <p className="text-xs text-amber-600 dark:text-amber-400 text-center font-medium mt-2">
                     You need at least one mentee to assign or schedule tasks.
                   </p>
                 )}
               </form>
 
               {/* Scheduled Questions Queue (Next 30 Days) */}
-              <div className="mt-6 pt-5 border-t border-brand-200">
+              <div className="mt-6 pt-5 border-t border-brand-200 dark:border-brand-900/60">
                 <div className="flex items-center justify-between mb-2.5">
-                  <h4 className="text-xs font-bold text-surface-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-brand-600" />
+                  <h4 className="text-xs font-bold text-surface-900 dark:text-surface-100 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
                     Scheduled Questions Queue
-                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-brand-100 text-brand-800">
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-brand-100 dark:bg-brand-950 text-brand-800 dark:text-brand-300">
                       {scheduledTasks.length}
                     </span>
                   </h4>
@@ -2196,7 +2408,7 @@ export default function Dashboard() {
                 </div>
 
                 {scheduledTasks.length === 0 ? (
-                  <div className="p-3 bg-white/60 rounded-xl border border-dashed border-brand-200 text-center text-xs text-surface-500">
+                  <div className="p-3 bg-white/60 dark:bg-surface-850/60 rounded-xl border border-dashed border-brand-200 dark:border-brand-900/60 text-center text-xs text-surface-500 dark:text-surface-400">
                     No questions scheduled for upcoming days. Pick an upcoming date above to queue questions for the month ahead!
                   </div>
                 ) : (
@@ -2206,25 +2418,25 @@ export default function Dashboard() {
                       return (
                         <li
                           key={task.id}
-                          className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white border border-brand-100 shadow-2xs hover:border-brand-300 transition-all"
+                          className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white dark:bg-surface-850 border border-brand-100 dark:border-brand-900/60 shadow-2xs hover:border-brand-300 dark:hover:border-brand-700 transition-all"
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-semibold text-brand-800 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded text-[11px] whitespace-nowrap">
+                            <span className="font-semibold text-brand-800 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/80 border border-brand-200 dark:border-brand-800 px-2 py-0.5 rounded text-[11px] whitespace-nowrap">
                               {formatScheduledDateLabel(task.scheduled_date, todayIST)}
                             </span>
                             {taskTargetYear && (
-                              <span className="font-semibold text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">
+                              <span className="font-semibold text-purple-800 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">
                                 {taskTargetYear === 'all' ? 'All Years' : `Year ${taskTargetYear}`}
                               </span>
                             )}
-                            <span className="font-bold text-surface-900 truncate">
+                            <span className="font-bold text-surface-900 dark:text-surface-100 truncate">
                               {formatProblemTitle(task.problem_slug_or_id, task.platform)}
                             </span>
                             <a
                               href={getTaskLink(task)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-surface-400 hover:text-brand-600 transition-colors shrink-0"
+                              className="text-surface-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors shrink-0"
                               title="Open Problem Link"
                             >
                               <ExternalLink className="w-3 h-3" />
@@ -2236,7 +2448,7 @@ export default function Dashboard() {
                               type="button"
                               onClick={() => handleDeleteScheduledTask(task.id)}
                               disabled={deletingScheduledId === task.id}
-                              className="p-1 rounded text-surface-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              className="p-1 rounded text-surface-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                               title="Cancel scheduled question"
                             >
                               {deletingScheduledId === task.id ? (
@@ -2254,37 +2466,37 @@ export default function Dashboard() {
               </div>
 
               {/* Recently Assigned Active Tasks */}
-              <div className="mt-6 pt-5 border-t border-brand-100 flex-1 flex flex-col min-h-0">
-                <h4 className="text-xs font-bold text-surface-900 uppercase tracking-wider mb-2.5">
+              <div className="mt-6 pt-5 border-t border-brand-100 dark:border-brand-900/60 flex-1 flex flex-col min-h-0">
+                <h4 className="text-xs font-bold text-surface-900 dark:text-surface-100 uppercase tracking-wider mb-2.5">
                   Recently Assigned (Active Cohort Tasks)
                 </h4>
                 {groupedTasks.length === 0 ? (
-                  <p className="text-xs text-surface-500">No tasks assigned yet.</p>
+                  <p className="text-xs text-surface-500 dark:text-surface-400">No tasks assigned yet.</p>
                 ) : (
                   <ul className="space-y-2 overflow-y-auto pr-2 max-h-64">
                     {groupedTasks.map(group => (
                       <li
                         key={group.key}
                         onClick={() => setSelectedTaskGroup(group)}
-                        className="flex items-center justify-between text-sm p-3 rounded-lg bg-white border border-brand-100 hover:border-brand-300 hover:shadow-sm cursor-pointer transition-all"
+                        className="flex items-center justify-between text-sm p-3 rounded-lg bg-white dark:bg-surface-850 border border-brand-100 dark:border-brand-900/60 hover:border-brand-300 dark:hover:border-brand-700 hover:shadow-sm cursor-pointer transition-all"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-surface-900">{group.problem_slug_or_id}</span>
+                          <span className="font-bold text-surface-900 dark:text-surface-100">{group.problem_slug_or_id}</span>
                           <a
                             href={getTaskLink(group)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="text-surface-400 hover:text-brand-600 transition-colors"
+                            className="text-surface-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
                             title="Open Problem Link"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </a>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-xs font-semibold text-surface-500 bg-surface-50 px-2 py-1 rounded">{group.platform}</span>
+                          <span className="text-xs font-semibold text-surface-500 dark:text-surface-400 bg-surface-50 dark:bg-surface-800 px-2 py-1 rounded">{group.platform}</span>
                           <div className="flex items-center gap-1 text-xs font-bold text-surface-400">
-                            <span className="text-emerald-600">{group.tasks.filter((t: any) => t.status === 'Completed').length}</span>
+                            <span className="text-emerald-600 dark:text-emerald-400">{group.tasks.filter((t: any) => t.status === 'Completed').length}</span>
                             <span>/</span>
                             <span>{group.tasks.length}</span>
                           </div>

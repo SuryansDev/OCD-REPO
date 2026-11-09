@@ -12,8 +12,9 @@ import {
 } from '@/lib/handles';
 import { 
   Loader2, Save, User, Mail, Phone, Hash, BookOpen, GitBranch, 
-  ExternalLink, CheckCircle, AlertCircle, ArrowLeft
+  ExternalLink, CheckCircle, AlertCircle, ArrowLeft, Palette, Sparkles
 } from 'lucide-react';
+import { useRatingColorPreference } from '@/lib/ratingColors';
 
 function ProfileContent() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -22,6 +23,9 @@ function ProfileContent() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Preference for Codeforces rating colors (defaults to false)
+  const [showRatingColors, setShowRatingColors] = useRatingColorPreference();
 
   // Editable fields
   const [lcHandle, setLcHandle] = useState('');
@@ -110,8 +114,8 @@ function ProfileContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-50">
-        <div className="flex items-center gap-3 text-surface-300">
+      <div className="min-h-screen flex items-center justify-center bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
+        <div className="flex items-center gap-3 text-surface-400">
           <Loader2 className="w-5 h-5 animate-spin" />
           <span className="text-sm font-medium">Loading Profile…</span>
         </div>
@@ -120,14 +124,14 @@ function ProfileContent() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-50">
+    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
       <Navbar fullName={currentUser?.full_name || profile?.full_name || ''} role={(currentUser?.role || profile?.role) as any} />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         {/* Back Button */}
         <button 
           onClick={() => router.push(currentUser?.role === 'admin' ? '/admin' : '/dashboard')}
-          className="flex items-center gap-2 text-sm text-surface-500 hover:text-brand-600 transition-colors mb-6 group cursor-pointer"
+          className="flex items-center gap-2 text-sm text-surface-500 dark:text-surface-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors mb-6 group cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
           Back to {currentUser?.role === 'admin' ? 'Admin Panel' : 'Dashboard'}
@@ -141,30 +145,30 @@ function ProfileContent() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-surface-900">{profile?.full_name}</h1>
+                <h1 className="text-2xl font-bold text-surface-900 dark:text-surface-100">{profile?.full_name}</h1>
                 {isOwnProfile && (
-                  <span className="text-[10px] font-bold bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-bold bg-brand-100 dark:bg-brand-950/80 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 px-2 py-0.5 rounded-full">
                     YOU
                   </span>
                 )}
               </div>
-              <p className="text-sm text-surface-500 mt-0.5">{profile?.email}</p>
+              <p className="text-sm text-surface-500 dark:text-surface-400 mt-0.5">{profile?.email}</p>
               <div className="flex items-center gap-2 mt-2">
                 <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
                   profile?.role === 'admin' 
-                    ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+                    ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/80' 
                     : profile?.role === 'common_mentor'
-                    ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                    : 'bg-brand-50 text-brand-700 border border-brand-200'
+                    ? 'bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800/80'
+                    : 'bg-brand-50 text-brand-700 border border-brand-200 dark:bg-brand-950/60 dark:text-brand-300 dark:border-brand-800/80'
                 }`}>
                   {profile?.role === 'common_mentor' ? 'Common Mentor' : profile?.role}
                 </span>
                 <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider ${
                   profile?.approval_status === 'approved'
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/80'
                     : profile?.approval_status === 'pending'
-                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                    : 'bg-red-50 text-red-700 border border-red-200'
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/80'
+                    : 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/80'
                 }`}>
                   {profile?.approval_status}
                 </span>
@@ -175,43 +179,43 @@ function ProfileContent() {
 
         {/* Read-only Details */}
         <div className="card p-6 mb-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          <h2 className="text-lg font-bold text-surface-900 mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-surface-900 dark:text-surface-100 mb-4 flex items-center gap-2">
             <User className="w-5 h-5 text-brand-500" />
             Personal Information
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-surface-50 rounded-xl p-4 border border-surface-100">
+            <div className="bg-surface-50 dark:bg-surface-850 rounded-xl p-4 border border-surface-100 dark:border-surface-800">
               <div className="flex items-center gap-2 mb-1.5">
                 <Mail className="w-3.5 h-3.5 text-surface-400" />
                 <label className="text-[11px] font-bold uppercase tracking-wider text-surface-400">Email</label>
               </div>
-              <p className="text-sm font-semibold text-surface-800">{profile?.email}</p>
+              <p className="text-sm font-semibold text-surface-800 dark:text-surface-200">{profile?.email}</p>
             </div>
 
-            <div className="bg-surface-50 rounded-xl p-4 border border-surface-100">
+            <div className="bg-surface-50 dark:bg-surface-850 rounded-xl p-4 border border-surface-100 dark:border-surface-800">
               <div className="flex items-center gap-2 mb-1.5">
                 <Hash className="w-3.5 h-3.5 text-surface-400" />
                 <label className="text-[11px] font-bold uppercase tracking-wider text-surface-400">Roll Number</label>
               </div>
-              <p className="text-sm font-semibold text-surface-800">{profile?.roll_number || '—'}</p>
+              <p className="text-sm font-semibold text-surface-800 dark:text-surface-200">{profile?.roll_number || '—'}</p>
             </div>
 
-            <div className="bg-surface-50 rounded-xl p-4 border border-surface-100">
+            <div className="bg-surface-50 dark:bg-surface-850 rounded-xl p-4 border border-surface-100 dark:border-surface-800">
               <div className="flex items-center gap-2 mb-1.5">
                 <BookOpen className="w-3.5 h-3.5 text-surface-400" />
                 <label className="text-[11px] font-bold uppercase tracking-wider text-surface-400">Year</label>
               </div>
-              <p className="text-sm font-semibold text-surface-800">
+              <p className="text-sm font-semibold text-surface-800 dark:text-surface-200">
                 {profile?.year === 'Alumni' ? '🎓 Alumni' : profile?.year ? `Year ${profile.year}` : '—'}
               </p>
             </div>
 
-            <div className="bg-surface-50 rounded-xl p-4 border border-surface-100">
+            <div className="bg-surface-50 dark:bg-surface-850 rounded-xl p-4 border border-surface-100 dark:border-surface-800">
               <div className="flex items-center gap-2 mb-1.5">
                 <GitBranch className="w-3.5 h-3.5 text-surface-400" />
                 <label className="text-[11px] font-bold uppercase tracking-wider text-surface-400">Branch</label>
               </div>
-              <p className="text-sm font-semibold text-surface-800">{profile?.branch || '—'}</p>
+              <p className="text-sm font-semibold text-surface-800 dark:text-surface-200">{profile?.branch || '—'}</p>
             </div>
           </div>
         </div>
@@ -233,7 +237,7 @@ function ProfileContent() {
           <div className="space-y-4">
             {/* LeetCode Handle */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-surface-500 mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400 mb-1.5">
                 LeetCode Username
               </label>
               {canEdit ? (
@@ -252,11 +256,11 @@ function ProfileContent() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-surface-50 rounded-xl p-3 border border-surface-100 flex items-center gap-3">
+                <div className="bg-surface-50 dark:bg-surface-850 rounded-xl p-3 border border-surface-100 dark:border-surface-800 flex items-center gap-3">
                   <div className="w-5 h-5 rounded platform-lc flex items-center justify-center shrink-0">
                     <span className="text-[10px] font-black text-white">LC</span>
                   </div>
-                  <span className="text-sm font-semibold text-surface-800">
+                  <span className="text-sm font-semibold text-surface-800 dark:text-surface-200">
                     {cleanLeetCodeHandle(profile?.lc_handle) || 'Not set'}
                   </span>
                 </div>
@@ -266,7 +270,7 @@ function ProfileContent() {
                 <a 
                   href={getLeetCodeProfileUrl(lcHandle || profile?.lc_handle)!} 
                   target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 mt-1.5 transition-colors font-medium"
+                  className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 mt-1.5 transition-colors font-medium"
                 >
                   <ExternalLink className="w-3 h-3" /> View on LeetCode ({cleanLeetCodeHandle(lcHandle || profile?.lc_handle)})
                 </a>
@@ -275,7 +279,7 @@ function ProfileContent() {
 
             {/* Codeforces Handle */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-surface-500 mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400 mb-1.5">
                 Codeforces Handle
               </label>
               {canEdit ? (
@@ -294,11 +298,11 @@ function ProfileContent() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-surface-50 rounded-xl p-3 border border-surface-100 flex items-center gap-3">
+                <div className="bg-surface-50 dark:bg-surface-850 rounded-xl p-3 border border-surface-100 dark:border-surface-800 flex items-center gap-3">
                   <div className="w-5 h-5 rounded platform-cf flex items-center justify-center shrink-0">
                     <span className="text-[10px] font-black text-white">CF</span>
                   </div>
-                  <span className="text-sm font-semibold text-surface-800">
+                  <span className="text-sm font-semibold text-surface-800 dark:text-surface-200">
                     {cleanCodeforcesHandle(profile?.cf_handle) || 'Not set'}
                   </span>
                 </div>
@@ -308,7 +312,7 @@ function ProfileContent() {
                 <a 
                   href={getCodeforcesProfileUrl(cfHandle || profile?.cf_handle)!} 
                   target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 mt-1.5 transition-colors font-medium"
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mt-1.5 transition-colors font-medium"
                 >
                   <ExternalLink className="w-3 h-3" /> View on Codeforces ({cleanCodeforcesHandle(cfHandle || profile?.cf_handle)})
                 </a>
@@ -316,11 +320,11 @@ function ProfileContent() {
             </div>
 
             {/* Sync & Privacy Advisory Box */}
-            <div className="rounded-xl bg-amber-50/80 border border-amber-200/70 p-3.5 text-xs text-amber-900 flex items-start gap-2.5 mt-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/60 p-3.5 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5 mt-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="space-y-0.5">
-                <p className="font-bold text-amber-950">Important Privacy Requirement for Rankings &amp; Task Sync:</p>
-                <p className="text-amber-800 leading-relaxed">
+                <p className="font-bold text-amber-950 dark:text-amber-100">Important Privacy Requirement for Rankings &amp; Task Sync:</p>
+                <p className="text-amber-800 dark:text-amber-300 leading-relaxed">
                   Make sure your <strong>LeetCode profile and submission history</strong> are set to <strong>Public</strong> in your LeetCode Account Privacy settings. If set to Private, our system cannot pull contest ratings, questions solved, or verify assigned tasks.
                 </p>
               </div>
@@ -328,7 +332,7 @@ function ProfileContent() {
 
             {/* Contact Number */}
             <div className="pt-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-surface-500 mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400 mb-1.5">
                 Mobile Number
               </label>
               {canEdit ? (
@@ -343,9 +347,9 @@ function ProfileContent() {
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
                 </div>
               ) : (
-                <div className="bg-surface-50 rounded-xl p-3 border border-surface-100 flex items-center gap-3">
+                <div className="bg-surface-50 dark:bg-surface-850 rounded-xl p-3 border border-surface-100 dark:border-surface-800 flex items-center gap-3">
                   <Phone className="w-4 h-4 text-surface-400 shrink-0" />
-                  <span className="text-sm font-semibold text-surface-800">
+                  <span className="text-sm font-semibold text-surface-800 dark:text-surface-200">
                     {profile?.contact_number || 'Not provided'}
                   </span>
                 </div>
@@ -381,6 +385,95 @@ function ProfileContent() {
             </div>
           )}
         </div>
+
+        {/* Appearance & Display Preferences */}
+        {isOwnProfile && (
+          <div className="card p-6 mb-6 animate-fade-in" style={{ animationDelay: '0.25s' }}>
+            <h2 className="text-lg font-bold text-surface-900 dark:text-surface-100 mb-1 flex items-center gap-2">
+              <Palette className="w-5 h-5 text-brand-500" />
+              Display Preferences
+            </h2>
+            <p className="text-xs text-surface-500 dark:text-surface-400 mb-5">
+              Customize your personal appearance and leaderboard viewing preferences.
+            </p>
+
+            <div className="space-y-4">
+              {/* Leaderboard Rating Colors Switch */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-surface-50 dark:bg-surface-850 border border-surface-200 dark:border-surface-800">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-surface-900 dark:text-surface-100 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-500" />
+                      Codeforces Rating Colors in Leaderboard
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      showRatingColors
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                        : 'bg-surface-200 text-surface-600 dark:bg-surface-800 dark:text-surface-400'
+                    }`}>
+                      {showRatingColors ? 'Enabled' : 'Off (Default)'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-surface-500 dark:text-surface-400 leading-relaxed max-w-lg">
+                    Color participant handles and personal ranking banners according to Codeforces contest rating tiers (Newbie, Pupil, Specialist, Expert, Master, Grandmaster). Off by default.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !showRatingColors;
+                      setShowRatingColors(next);
+                      toast.info(
+                        'Preference Updated',
+                        next
+                          ? 'Rating colors enabled for leaderboard handles and banners.'
+                          : 'Rating colors disabled (clean monochrome default restored).'
+                      );
+                    }}
+                    role="switch"
+                    aria-checked={showRatingColors}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 ${
+                      showRatingColors ? 'bg-brand-600' : 'bg-surface-300 dark:bg-surface-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        showRatingColors ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Visual Preview */}
+              <div className="p-3.5 rounded-xl border border-dashed border-surface-200 dark:border-surface-800 bg-white/50 dark:bg-surface-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs">
+                <span className="font-semibold text-surface-500 dark:text-surface-400 shrink-0">
+                  Preview in Leaderboard:
+                </span>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {showRatingColors ? (
+                    <>
+                      <span className="font-semibold text-gray-500 dark:text-gray-400">newbie_coder</span>
+                      <span className="font-semibold text-cyan-600 dark:text-cyan-400">specialist</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">expert_dev</span>
+                      <span className="font-semibold text-purple-600 dark:text-purple-400">candidate_master</span>
+                      <span className="inline-flex items-baseline font-semibold">
+                        <span className="text-surface-900 dark:text-surface-100 font-extrabold">t</span>
+                        <span className="text-red-600 dark:text-red-500 font-bold">ourist</span>
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-surface-900 dark:text-surface-100 font-semibold">
+                      Standard text color (Default: clean monochrome names)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

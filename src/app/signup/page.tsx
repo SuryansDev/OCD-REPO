@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { UserPlus, Code2, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import DarkModeToggle from '@/components/DarkModeToggle';
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -89,10 +90,15 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden py-12 px-4">
-      <div className="absolute inset-0 bg-gradient-to-br from-surface-50 via-brand-50 to-surface-100" />
-      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-brand-200/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse-slow" />
-      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-brand-300/20 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 animate-pulse-slow" />
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden py-12 px-4 bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
+      {/* Top right dark mode toggle */}
+      <div className="absolute top-4 right-4 z-20">
+        <DarkModeToggle />
+      </div>
+
+      <div className="absolute inset-0 bg-gradient-to-br from-surface-50 via-brand-50 to-surface-100 dark:from-surface-950 dark:via-surface-900 dark:to-surface-950" />
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-brand-200/30 dark:bg-brand-900/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse-slow" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-brand-300/20 dark:bg-brand-800/15 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 animate-pulse-slow" />
 
       <div className="relative z-10 w-full max-w-2xl mx-auto animate-fade-in">
         <div className="text-center mb-8">
@@ -112,7 +118,7 @@ export default function SignupPage() {
               type="button"
               onClick={handleGoogleSignup}
               disabled={loadingGoogle || loading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-2xl bg-white border border-surface-200 hover:bg-surface-50 text-surface-800 font-semibold text-sm shadow-sm hover:shadow transition-all group"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-2xl bg-white dark:bg-surface-850 border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 text-surface-800 dark:text-surface-100 font-semibold text-sm shadow-sm hover:shadow transition-all group"
             >
               {loadingGoogle ? (
                 <Loader2 className="w-5 h-5 animate-spin text-brand-600" />
@@ -146,10 +152,10 @@ export default function SignupPage() {
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-surface-200" />
+              <div className="w-full border-t border-surface-200 dark:border-surface-700" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-white/80 text-surface-400 font-medium">
+              <span className="px-3 bg-white/80 dark:bg-surface-900/90 text-surface-400 font-medium">
                 Or fill details manually with password
               </span>
             </div>

@@ -152,14 +152,14 @@ export function ToastProvider() {
             key={item.id}
             onMouseEnter={() => setPausedId(item.id)}
             onMouseLeave={() => setPausedId(null)}
-            className={`pointer-events-auto rounded-xl border bg-white/95 backdrop-blur-md shadow-lg shadow-surface-900/10 p-3.5 sm:p-4 transition-all duration-300 animate-slide-up flex items-start gap-3 relative overflow-hidden ${
+            className={`pointer-events-auto rounded-xl border bg-white/95 dark:bg-surface-900/95 backdrop-blur-md shadow-lg shadow-surface-900/10 dark:shadow-black/40 p-3.5 sm:p-4 transition-all duration-300 animate-slide-up flex items-start gap-3 relative overflow-hidden ${
               isSuccess
-                ? 'border-emerald-200/80'
+                ? 'border-emerald-200/80 dark:border-emerald-800/80'
                 : isError
-                ? 'border-rose-200/80'
+                ? 'border-rose-200/80 dark:border-rose-800/80'
                 : isWarning
-                ? 'border-amber-200/80'
-                : 'border-blue-200/80'
+                ? 'border-amber-200/80 dark:border-amber-800/80'
+                : 'border-blue-200/80 dark:border-blue-800/80'
             }`}
           >
             {/* Left accent strip */}
@@ -179,12 +179,12 @@ export function ToastProvider() {
             <div
               className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
                 isSuccess
-                  ? 'text-emerald-700 bg-emerald-50'
+                  ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/60'
                   : isError
-                  ? 'text-rose-700 bg-rose-50'
+                  ? 'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/60'
                   : isWarning
-                  ? 'text-amber-700 bg-amber-50'
-                  : 'text-blue-700 bg-blue-50'
+                  ? 'text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-950/60'
+                  : 'text-blue-700 bg-blue-50 dark:text-blue-300 dark:bg-blue-950/60'
               }`}
             >
               {isSuccess && <CheckCircle2 className="w-4 h-4" />}
@@ -195,11 +195,11 @@ export function ToastProvider() {
 
             {/* Content */}
             <div className="flex-1 min-w-0 pr-4">
-              <h5 className="text-sm font-semibold text-surface-900 leading-snug">
+              <h5 className="text-sm font-semibold text-surface-900 dark:text-surface-100 leading-snug">
                 {item.title}
               </h5>
               {item.description && (
-                <p className="text-xs text-surface-600 mt-1 leading-relaxed whitespace-pre-line break-words">
+                <p className="text-xs text-surface-600 dark:text-surface-300 mt-1 leading-relaxed whitespace-pre-line break-words">
                   {item.description}
                 </p>
               )}
@@ -208,7 +208,7 @@ export function ToastProvider() {
             {/* Close Button */}
             <button
               onClick={() => removeToast(item.id)}
-              className="text-surface-400 hover:text-surface-700 hover:bg-surface-100 p-1 rounded-md transition-colors shrink-0 -mr-1 -mt-1 focus:outline-none"
+              className="text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 hover:bg-surface-100 dark:hover:bg-surface-800 p-1 rounded-md transition-colors shrink-0 -mr-1 -mt-1 focus:outline-none"
               title="Close notification"
             >
               <X className="w-3.5 h-3.5" />
