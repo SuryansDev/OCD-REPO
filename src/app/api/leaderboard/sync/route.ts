@@ -289,5 +289,10 @@ export async function GET(request: NextRequest) {
     stats: activeStats,
     issues,
     latest_contests: latestContests,
+  }, {
+    headers: {
+      // Allow browsers/CDN to serve a stale response instantly while revalidating in background
+      'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+    },
   });
 }

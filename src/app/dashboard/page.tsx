@@ -116,30 +116,76 @@ export default function Dashboard() {
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
+    // ── Step 1: Auth (must be sequential) ────────────────────────────────────
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/login'); return; }
 
-    const { data: userProfile } = await supabase.from('users').select('*').eq('id', user.id).single();
+    const { data: userProfile } = await supabase
+      .from('users').select('*').eq('id', user.id).single();
     if (!userProfile) { router.push('/login'); return; }
     setProfile(userProfile);
     if (userProfile.just_promoted && userProfile.year !== 'Alumni') {
       setShowPromotion(true);
     }
 
-    // 1. Immediately roll out any scheduled tasks that became due today (IST)
-    // and fetch upcoming scheduled tasks for this mentor
-    try {
-      const schedRes = await fetch('/api/tasks/schedule');
-      if (schedRes.ok) {
-        const schedData = await schedRes.json();
-        if (schedData.scheduledTasks) {
-          setScheduledTasks(schedData.scheduledTasks);
-        }
-      }
-    } catch { }
+    // ── Step 2: Fire all independent critical queries IN PARALLEL ─────────────
+    const [
+      mTasksResult,
+      menteeshipsResult,
+      mentorshipsResult,
+      aTasksResult,
+      usersResult,
+      reqsResult,
+      incReqsResult,
+      schedResult,
+    ] = await Promise.all([
+      // My assigned tasks
+      supabase.from('tasks').select('*')
+        .eq('assigned_to', user.id)
+        .order('created_at', { ascending: false }),
 
-    // 2. Fetch tasks assigned to me (now includes any scheduled tasks rolled out for today!)
-    const { data: mTasks } = await supabase.from('tasks').select('*').eq('assigned_to', user.id).order('created_at', { ascending: false });
+      // My mentees
+      supabase.from('mentorships')
+        .select('mentee:users!mentorships_mentee_id_fkey(*)')
+        .eq('mentor_id', user.id),
+
+      // My mentors
+      supabase.from('mentorships')
+        .select('mentor:users!mentorships_mentor_id_fkey(*)')
+        .eq('mentee_id', user.id),
+
+      // Tasks I assigned (mentor view)
+      supabase.from('tasks')
+        .select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email)')
+        .eq('assigned_by', user.id)
+        .order('created_at', { ascending: false }),
+
+      // All eligible users for mentor request dropdown (only needed columns)
+      supabase.from('users')
+        .select('id, full_name, email, role, year, branch, roll_number, cf_handle, lc_handle, approval_status, contact_number, created_at')
+        .neq('id', user.id)
+        .eq('approval_status', 'approved')
+        .neq('role', 'admin'),
+
+      // Pending mentor requests I made
+      supabase.from('mentorship_requests')
+        .select('*, mentor:users!mentorship_requests_mentor_id_fkey(full_name)')
+        .eq('mentee_id', user.id)
+        .eq('status', 'pending'),
+
+      // Incoming mentee requests
+      supabase.from('mentorship_requests')
+        .select('id, mentee_id, mentor_id, status, created_at, mentee:users!mentorship_requests_mentee_id_fkey(id, full_name, email, year, branch, roll_number, cf_handle, lc_handle)')
+        .eq('mentor_id', user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false }),
+
+      // Scheduled tasks (fetch only, rollout happens in leaderboard API)
+      fetch('/api/tasks/schedule').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+
+    // ── Process critical results & unblock UI immediately ─────────────────────
+    const mTasks = mTasksResult.data;
     if (mTasks) {
       const taskMap = new Map<string, any>();
       mTasks.forEach((t: any) => {
@@ -154,45 +200,17 @@ export default function Dashboard() {
       setMyTasks(Array.from(taskMap.values()));
     }
 
-    // Fetch my mentees
-    const { data: menteeships } = await supabase.from('mentorships').select('mentee:users!mentorships_mentee_id_fkey(*)').eq('mentor_id', user.id);
-    const mentees = menteeships ? menteeships.map((m: any) => m.mentee) : [];
+    const mentees = menteeshipsResult.data
+      ? menteeshipsResult.data.map((m: any) => m.mentee)
+      : [];
     setMyMentees(mentees);
 
-    // Fetch my mentors
-    const { data: mentorships } = await supabase.from('mentorships').select('mentor:users!mentorships_mentor_id_fkey(*)').eq('mentee_id', user.id);
-    const mentors = mentorships ? mentorships.map((m: any) => m.mentor) : [];
+    const mentors = mentorshipsResult.data
+      ? mentorshipsResult.data.map((m: any) => m.mentor)
+      : [];
     setMyMentors(mentors);
 
-    // Fetch all tasks for my mentees (to calculate progress and alerts regardless of who assigned them)
-    if (mentees.length > 0) {
-      try {
-        const menteeRes = await fetch('/api/tasks/mentees');
-        if (menteeRes.ok) {
-          const menteeData = await menteeRes.json();
-          if (menteeData.tasks) {
-            setMenteeAllTasks(menteeData.tasks);
-          }
-        } else {
-          const menteeIds = mentees.map((m: any) => m.id);
-          const { data: allMenteeTasks } = await supabase
-            .from('tasks')
-            .select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email, year), assigner:users!tasks_assigned_by_fkey(id, full_name, role)')
-            .in('assigned_to', menteeIds);
-          if (allMenteeTasks) setMenteeAllTasks(allMenteeTasks);
-        }
-      } catch {
-        const menteeIds = mentees.map((m: any) => m.id);
-        const { data: allMenteeTasks } = await supabase
-          .from('tasks')
-          .select('*')
-          .in('assigned_to', menteeIds);
-        if (allMenteeTasks) setMenteeAllTasks(allMenteeTasks);
-      }
-    }
-
-    // Fetch tasks I assigned (with mentee details, including today's rolled out tasks)
-    const { data: aTasks } = await supabase.from('tasks').select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email)').eq('assigned_by', user.id).order('created_at', { ascending: false });
+    const aTasks = aTasksResult.data;
     if (aTasks) {
       const taskMap = new Map<string, any>();
       aTasks.forEach((t: any) => {
@@ -207,48 +225,48 @@ export default function Dashboard() {
       setAssignedTasks(Array.from(taskMap.values()));
     }
 
-    // Fetch all eligible users for requesting mentors (approved non-admin members only)
-    const { data: users } = await supabase
-      .from('users')
-      .select('*')
-      .neq('id', user.id)
-      .eq('approval_status', 'approved')
-      .neq('role', 'admin');
-    if (users) setAllUsers(users);
+    if (usersResult.data) setAllUsers(usersResult.data as UserProfile[]);
+    if (reqsResult.data) setPendingRequests(reqsResult.data);
+    if (incReqsResult.data) setIncomingRequests(incReqsResult.data);
+    if (schedResult?.scheduledTasks) setScheduledTasks(schedResult.scheduledTasks);
 
-    // Fetch pending requests I made (asking someone to be my mentor)
-    const { data: reqs } = await supabase.from('mentorship_requests').select('*, mentor:users!mentorship_requests_mentor_id_fkey(full_name)').eq('mentee_id', user.id).eq('status', 'pending');
-    if (reqs) setPendingRequests(reqs);
-
-    // Fetch incoming pending requests (students asking me to be their mentor)
-    const { data: incReqs } = await supabase
-      .from('mentorship_requests')
-      .select('id, mentee_id, mentor_id, status, created_at, mentee:users!mentorship_requests_mentee_id_fkey(id, full_name, email, year, branch, roll_number, cf_handle, lc_handle)')
-      .eq('mentor_id', user.id)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-    if (incReqs) setIncomingRequests(incReqs);
-
-    // Fetch leaderboard data (includes all non-admins who have filled their profiles)
-    try {
-      const lbRes = await fetch('/api/leaderboard/sync');
-      if (lbRes.ok) {
-        const lbData = await lbRes.json();
-        if (lbData.stats) {
-          const isProfileFilled = (u: any) => Boolean(
-            u && u.roll_number && String(u.roll_number).trim() !== '' &&
-            u.year && String(u.year).trim() !== ''
-          );
-          const validStats = lbData.stats.filter(
-            (s: any) => s.user && s.user.role !== 'admin' && isProfileFilled(s.user)
-          );
-          setLeaderboardData(validStats);
-        }
-        if (lbData.latest_contests) setLatestContests(lbData.latest_contests);
-      }
-    } catch { }
-
+    // ── Show the page as soon as critical data is ready ───────────────────────
     setLoading(false);
+
+    // ── Step 3: Fire secondary queries IN PARALLEL (non-blocking) ────────────
+    const [menteeTasksResult, lbResult] = await Promise.all([
+      // Mentee tasks (mentor view) — only if mentor has mentees
+      mentees.length > 0
+        ? fetch('/api/tasks/mentees').then(r => r.ok ? r.json() : null).catch(() => null)
+        : Promise.resolve(null),
+
+      // Leaderboard (also triggers rollout + first-visit daily sync server-side)
+      fetch('/api/leaderboard/sync').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+
+    if (menteeTasksResult?.tasks) {
+      setMenteeAllTasks(menteeTasksResult.tasks);
+    } else if (mentees.length > 0) {
+      // Fallback: fetch directly from supabase
+      const menteeIds = mentees.map((m: any) => m.id);
+      const { data: allMenteeTasks } = await supabase
+        .from('tasks')
+        .select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email, year), assigner:users!tasks_assigned_by_fkey(id, full_name, role)')
+        .in('assigned_to', menteeIds);
+      if (allMenteeTasks) setMenteeAllTasks(allMenteeTasks);
+    }
+
+    if (lbResult?.stats) {
+      const isProfileFilled = (u: any) => Boolean(
+        u && u.roll_number && String(u.roll_number).trim() !== '' &&
+        u.year && String(u.year).trim() !== ''
+      );
+      const validStats = lbResult.stats.filter(
+        (s: any) => s.user && s.user.role !== 'admin' && isProfileFilled(s.user)
+      );
+      setLeaderboardData(validStats);
+    }
+    if (lbResult?.latest_contests) setLatestContests(lbResult.latest_contests);
   }, [supabase, router]);
 
   useEffect(() => {
