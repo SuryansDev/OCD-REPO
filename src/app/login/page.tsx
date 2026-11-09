@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LogIn, Mail, Lock, Code2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import DarkModeToggle from '@/components/DarkModeToggle';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -101,7 +102,7 @@ function LoginForm() {
           type="button"
           onClick={handleGoogleLogin}
           disabled={loadingGoogle || loading}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-2xl bg-white border border-surface-200 hover:bg-surface-50 text-surface-800 font-semibold text-sm shadow-sm hover:shadow transition-all group"
+          className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-2xl bg-white dark:bg-surface-850 border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 text-surface-800 dark:text-surface-100 font-semibold text-sm shadow-sm hover:shadow transition-all group"
         >
           {loadingGoogle ? (
             <Loader2 className="w-5 h-5 animate-spin text-brand-600" />
@@ -128,17 +129,17 @@ function LoginForm() {
           <span>Continue with College Google ID</span>
         </button>
         <div className="text-center text-[11px] text-surface-400 mt-2 font-medium">
-          Only official <span className="font-semibold text-brand-600">@nitkkr.ac.in</span> accounts permitted
+          Only official <span className="font-semibold text-brand-600 dark:text-brand-400">@nitkkr.ac.in</span> accounts permitted
         </div>
       </div>
 
       {/* Divider */}
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-surface-200" />
+          <div className="w-full border-t border-surface-200 dark:border-surface-700" />
         </div>
         <div className="relative flex justify-center text-xs">
-          <span className="px-3 bg-white/80 text-surface-400 font-medium">
+          <span className="px-3 bg-white/80 dark:bg-surface-900/90 text-surface-400 font-medium">
             Or sign in with email &amp; password
           </span>
         </div>
@@ -147,11 +148,11 @@ function LoginForm() {
       <form onSubmit={handleLogin} className="space-y-4">
         {/* Email */}
         <div className="space-y-1.5">
-          <label htmlFor="email" className="text-xs font-semibold text-surface-800 uppercase tracking-wider">
+          <label htmlFor="email" className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">
             Email Address
           </label>
           <div className="relative">
-            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-300" />
+            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
             <input
               id="email"
               type="email"
@@ -166,11 +167,11 @@ function LoginForm() {
 
         {/* Password */}
         <div className="space-y-1.5">
-          <label htmlFor="password" className="text-xs font-semibold text-surface-800 uppercase tracking-wider">
+          <label htmlFor="password" className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">
             Password
           </label>
           <div className="relative">
-            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-300" />
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
             <input
               id="password"
               type={showPassword ? 'text' : 'password'}
@@ -183,7 +184,7 @@ function LoginForm() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-300 hover:text-surface-800 transition-colors"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-800 dark:hover:text-surface-200 transition-colors"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -225,12 +226,17 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden py-12 px-4">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden py-12 px-4 bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
+      {/* Top right dark mode toggle */}
+      <div className="absolute top-4 right-4 z-20">
+        <DarkModeToggle />
+      </div>
+
       {/* Animated background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-surface-50 via-brand-50 to-surface-100" />
-      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-brand-200/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse-slow" />
-      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-brand-300/20 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 animate-pulse-slow" />
-      <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-brand-100/40 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute inset-0 bg-gradient-to-br from-surface-50 via-brand-50 to-surface-100 dark:from-surface-950 dark:via-surface-900 dark:to-surface-950" />
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-brand-200/30 dark:bg-brand-900/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse-slow" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-brand-300/20 dark:bg-brand-800/15 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 animate-pulse-slow" />
+      <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] bg-brand-100/40 dark:bg-brand-950/40 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
 
       <div className="relative z-10 w-full max-w-md mx-auto animate-fade-in">
         {/* Brand header */}
