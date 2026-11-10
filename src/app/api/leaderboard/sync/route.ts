@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cleanCodeforcesHandle, cleanLeetCodeHandle } from '@/lib/handles';
 import type { PlatformSyncStatus } from '@/lib/types';
-import { executeDailySync, rollOutScheduledTasks, triggerDailySyncIfFirstVisitToday } from '@/lib/syncEngine';
+import { executeDailySync, rollOutScheduledTasks, triggerDailySyncIfFirstVisitToday, syncSingleUserStats } from '@/lib/syncEngine';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 function createRouteHandlerClient(request: NextRequest) {
@@ -45,24 +45,46 @@ export async function POST(request: NextRequest) {
 
   let supabaseClient;
   let source = 'cron';
+  let targetUserId: string | null = null;
+
+  let requestBody: any = null;
+  try {
+    requestBody = await request.json();
+  } catch {}
+
+  targetUserId = requestBody?.userId || searchParams.get('userId');
 
   if (isCronAuthorized) {
     supabaseClient = createAdminSupabaseClient();
   } else {
-    // 2. Admin user check — preserve full existing admin manual sync powers
+    // 2. User authentication check
     const supabase = createRouteHandlerClient(request);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: adminCheck } = await supabase.from('users').select('role').eq('id', user.id).single();
-    if (adminCheck?.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+    const { data: userRecord } = await supabase.from('users').select('role').eq('id', user.id).single();
+    const isAdmin = userRecord?.role === 'admin';
+
+    // Single user sync allowed for own profile or admin; full daily sync requires admin
+    if (targetUserId) {
+      if (targetUserId !== user.id && !isAdmin) {
+        return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+      }
+    } else {
+      if (!isAdmin) {
+        return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+      }
     }
 
     supabaseClient = createAdminSupabaseClient();
-    source = 'admin_manual';
+    source = targetUserId ? 'single_user_sync' : 'admin_manual';
+  }
+
+  if (targetUserId) {
+    const singleResult = await syncSingleUserStats(supabaseClient, targetUserId);
+    return NextResponse.json(singleResult);
   }
 
   const result = await executeDailySync({
@@ -291,8 +313,7 @@ export async function GET(request: NextRequest) {
     latest_contests: latestContests,
   }, {
     headers: {
-      // Allow browsers/CDN to serve a stale response instantly while revalidating in background
-      'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
     },
   });
 }

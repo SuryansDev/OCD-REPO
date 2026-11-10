@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Code2, LogOut } from 'lucide-react';
 import type { UserRole } from '@/lib/types';
 import DarkModeToggle from '@/components/DarkModeToggle';
+import { clearDashboardCache } from '@/lib/dashboardCache';
 
 interface NavbarProps {
   fullName: string;
@@ -17,6 +18,7 @@ export default function Navbar({ fullName, role }: NavbarProps) {
   const supabase = createClient();
 
   const handleLogout = async () => {
+    clearDashboardCache();
     await supabase.auth.signOut();
     router.push('/login');
   };

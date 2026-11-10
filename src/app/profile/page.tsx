@@ -15,6 +15,7 @@ import {
   ExternalLink, CheckCircle, AlertCircle, ArrowLeft, Palette, Sparkles
 } from 'lucide-react';
 import { useRatingColorPreference } from '@/lib/ratingColors';
+import { updateCachedProfile } from '@/lib/dashboardCache';
 
 function ProfileContent() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -80,30 +81,57 @@ function ProfileContent() {
     const cleanedCf = cleanCodeforcesHandle(cfHandle) || null;
     const cleanedContact = contactNumber.trim() || null;
 
-    const { error } = await supabase.from('users').update({
-      lc_handle: cleanedLc,
-      cf_handle: cleanedCf,
-      contact_number: cleanedContact,
-    }).eq('id', profile.id);
+    try {
+      const res = await fetch('/api/users/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: profile.id,
+          lc_handle: cleanedLc,
+          cf_handle: cleanedCf,
+          contact_number: cleanedContact,
+        }),
+      });
 
-    if (error) {
-      setSaveError('Failed to save changes. Please try again.');
-      toast.error('Save Failed', 'Failed to save changes. Please try again.');
-    } else {
-      setSaveSuccess(true);
-      toast.success('Profile Saved', 'Your coding handles and profile details have been saved.');
-      setLcHandle(cleanedLc || '');
-      setCfHandle(cleanedCf || '');
-      setContactNumber(cleanedContact || '');
-      setProfile(prev => prev ? {
-        ...prev,
-        lc_handle: cleanedLc,
-        cf_handle: cleanedCf,
-        contact_number: cleanedContact,
-      } : null);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        const errorMsg = data?.error || 'Failed to save changes. Please try again.';
+        setSaveError(errorMsg);
+        toast.error('Save Failed', errorMsg);
+      } else {
+        setSaveSuccess(true);
+        toast.success(
+          'Profile Saved',
+          isOwnProfile
+            ? 'Your coding handles and profile details have been saved.'
+            : `Successfully updated ${profile.full_name}'s profile handles.`
+        );
+        setLcHandle(cleanedLc || '');
+        setCfHandle(cleanedCf || '');
+        setContactNumber(cleanedContact || '');
+        setProfile(prev => prev ? {
+          ...prev,
+          lc_handle: cleanedLc,
+          cf_handle: cleanedCf,
+          contact_number: cleanedContact,
+        } : null);
+        if (isOwnProfile) {
+          updateCachedProfile({
+            lc_handle: cleanedLc,
+            cf_handle: cleanedCf,
+            contact_number: cleanedContact,
+          });
+        }
+        setTimeout(() => setSaveSuccess(false), 3000);
+      }
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Failed to save changes. Please try again.';
+      setSaveError(errorMsg);
+      toast.error('Save Failed', errorMsg);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const hasChanges = profile && canEdit && (
@@ -222,11 +250,11 @@ function ProfileContent() {
 
         {/* Platform Profiles & Contact */}
         <div className="card p-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-          <h2 className="text-lg font-bold text-surface-900 mb-1 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-surface-900 dark:text-surface-100 mb-1 flex items-center gap-2">
             <ExternalLink className="w-5 h-5 text-brand-500" />
             Platform Profiles & Contact
           </h2>
-          <p className="text-xs text-surface-400 mb-5">
+          <p className="text-xs text-surface-500 dark:text-surface-400 mb-5">
             {isOwnProfile 
               ? 'You can update these fields anytime.' 
               : currentUser?.role === 'admin'
@@ -357,9 +385,9 @@ function ProfileContent() {
             </div>
           </div>
 
-          {/* Save Button & Status (only shown for own profile) */}
-          {isOwnProfile && (
-            <div className="mt-6 flex items-center gap-3">
+          {/* Save Button & Status (shown for own profile or admin) */}
+          {canEdit && (
+            <div className="mt-6 flex items-center gap-3 flex-wrap">
               <button
                 onClick={handleSave}
                 disabled={saving || !hasChanges}
@@ -368,17 +396,17 @@ function ProfileContent() {
                 {saving ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
                 ) : (
-                  <><Save className="w-4 h-4" /> Save Changes</>
+                  <><Save className="w-4 h-4" /> {isOwnProfile ? 'Save Changes' : `Save ${profile?.full_name?.split(' ')[0] || "User"}'s Handles`}</>
                 )}
               </button>
 
               {saveSuccess && (
-                <div className="flex items-center gap-1.5 text-emerald-600 text-sm font-semibold animate-fade-in">
+                <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-sm font-semibold animate-fade-in">
                   <CheckCircle className="w-4 h-4" /> Saved successfully!
                 </div>
               )}
               {saveError && (
-                <div className="flex items-center gap-1.5 text-red-600 text-sm font-semibold animate-fade-in">
+                <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 text-sm font-semibold animate-fade-in">
                   <AlertCircle className="w-4 h-4" /> {saveError}
                 </div>
               )}

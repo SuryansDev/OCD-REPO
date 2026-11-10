@@ -175,19 +175,19 @@ Please update your profile settings so your contest ratings and tasks can sync p
         {issueUsers.length > 0 && (
           <section className="mb-10 animate-fade-in">
             <div className="card border-amber-200 dark:border-amber-800/80 border-2 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/40 dark:from-amber-950/40 dark:via-surface-900 dark:to-amber-950/20 p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-amber-100 pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-amber-100 dark:border-amber-900/40 pb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-amber-100 text-amber-700">
+                  <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
                     <AlertTriangle className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-amber-950 flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-amber-950 dark:text-amber-100 flex items-center gap-2">
                       Coding Profiles Requiring Attention
-                      <span className="px-2 py-0.5 rounded-full text-xs font-black bg-amber-200 text-amber-900">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-black bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
                         {issueUsers.length} {issueUsers.length === 1 ? 'user' : 'users'}
                       </span>
                     </h2>
-                    <p className="text-xs text-amber-800 mt-0.5">
+                    <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
                       These student profiles cannot be synced automatically. Common reasons: <strong>LeetCode profile or submissions set to Private</strong>, invalid/missing handles, or Codeforces handle not found.
                     </p>
                   </div>
@@ -216,15 +216,15 @@ Please update your profile settings so your contest ratings and tasks can sync p
                   return (
                     <div 
                       key={u.id}
-                      className="bg-white rounded-xl p-4 border border-amber-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4"
+                      className="bg-white dark:bg-surface-850 rounded-xl p-4 border border-amber-200/80 dark:border-amber-900/40 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-surface-900 text-sm">{u.full_name}</span>
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-surface-100 text-surface-600">
+                          <span className="font-bold text-surface-900 dark:text-surface-100 text-sm">{u.full_name}</span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300">
                             Year {u.year || 'N/A'} • {u.branch || 'N/A'}
                           </span>
-                          <span className="text-xs text-surface-400 font-mono">
+                          <span className="text-xs text-surface-400 dark:text-surface-500 font-mono">
                             {u.email}
                           </span>
                         </div>
@@ -232,7 +232,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
                         {/* Platform Breakdown */}
                         <div className="grid sm:grid-cols-2 gap-2 mt-2.5 text-xs">
                           {/* LeetCode Status */}
-                          <div className={`p-2 rounded-lg border ${lcHasIssue ? 'bg-amber-50/60 border-amber-200 text-amber-900' : 'bg-emerald-50/60 border-emerald-200 text-emerald-800'}`}>
+                          <div className={`p-2 rounded-lg border ${lcHasIssue ? 'bg-amber-50/60 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200' : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300'}`}>
                             <div className="flex items-center justify-between gap-1">
                               <span className="font-bold flex items-center gap-1">
                                 <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
@@ -243,27 +243,27 @@ Please update your profile settings so your contest ratings and tasks can sync p
                                   href={lcUrl} 
                                   target="_blank" 
                                   rel="noopener noreferrer"
-                                  className="text-amber-700 hover:text-amber-900 font-medium inline-flex items-center gap-0.5 underline"
+                                  className="text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 font-medium inline-flex items-center gap-0.5 underline"
                                 >
                                   {lcClean || u.lc_handle} <ExternalLink className="w-2.5 h-2.5" />
                                 </a>
                               ) : (
-                                <span className="text-surface-400 italic">Not set</span>
+                                <span className="text-surface-400 dark:text-surface-500 italic">Not set</span>
                               )}
                             </div>
                             {lcHasIssue ? (
-                              <p className="text-[11px] text-amber-700 mt-1 font-medium">
+                              <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1 font-medium">
                                 ⚠️ {lcReason}
                               </p>
                             ) : (
-                              <p className="text-[11px] text-emerald-700 mt-1">
+                              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-1">
                                 ✓ Verified ({stats?.lc_total_solved || 0} solved)
                               </p>
                             )}
                           </div>
 
                           {/* Codeforces Status */}
-                          <div className={`p-2 rounded-lg border ${cfHasIssue ? 'bg-red-50/60 border-red-200 text-red-900' : 'bg-emerald-50/60 border-emerald-200 text-emerald-800'}`}>
+                          <div className={`p-2 rounded-lg border ${cfHasIssue ? 'bg-red-50/60 dark:bg-red-950/40 border-red-200 dark:border-red-800/80 text-red-900 dark:text-red-200' : 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300'}`}>
                             <div className="flex items-center justify-between gap-1">
                               <span className="font-bold flex items-center gap-1">
                                 <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
@@ -274,20 +274,20 @@ Please update your profile settings so your contest ratings and tasks can sync p
                                   href={cfUrl} 
                                   target="_blank" 
                                   rel="noopener noreferrer"
-                                  className="text-blue-700 hover:text-blue-900 font-medium inline-flex items-center gap-0.5 underline"
+                                  className="text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-200 font-medium inline-flex items-center gap-0.5 underline"
                                 >
                                   {cfClean || u.cf_handle} <ExternalLink className="w-2.5 h-2.5" />
                                 </a>
                               ) : (
-                                <span className="text-surface-400 italic">Not set</span>
+                                <span className="text-surface-400 dark:text-surface-500 italic">Not set</span>
                               )}
                             </div>
                             {cfHasIssue ? (
-                              <p className="text-[11px] text-red-700 mt-1 font-medium">
+                              <p className="text-[11px] text-red-700 dark:text-red-300 mt-1 font-medium">
                                 ⚠️ {cfReason}
                               </p>
                             ) : (
-                              <p className="text-[11px] text-emerald-700 mt-1">
+                              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-1">
                                 ✓ Verified (Rating: {stats?.cf_rating || 'Unrated'})
                               </p>
                             )}
@@ -299,17 +299,17 @@ Please update your profile settings so your contest ratings and tasks can sync p
                       <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                         <button
                           onClick={() => handleCopyNotice(u, lcHasIssue ? lcReason : null, cfHasIssue ? cfReason : null)}
-                          className="px-2.5 py-1.5 rounded-lg border border-surface-200 bg-white hover:bg-surface-50 text-xs font-semibold text-surface-700 flex items-center gap-1 transition-colors"
+                          className="px-2.5 py-1.5 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-50 dark:hover:bg-surface-700 text-xs font-semibold text-surface-700 dark:text-surface-200 flex items-center gap-1 transition-colors"
                           title="Copy student advice message to clipboard"
                         >
                           {copiedUserId === u.id ? (
                             <>
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              <span className="text-emerald-700">Copied!</span>
+                              <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              <span className="text-emerald-700 dark:text-emerald-300">Copied!</span>
                             </>
                           ) : (
                             <>
-                              <Copy className="w-3.5 h-3.5 text-surface-400" />
+                              <Copy className="w-3.5 h-3.5 text-surface-400 dark:text-surface-500" />
                               <span>Copy Notice</span>
                             </>
                           )}
@@ -332,7 +332,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
 
         {/* ─── SECTION 2: ACCOUNT APPROVALS (PENDING USERS) ───────────────── */}
         <section className="mb-12">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-surface-900 dark:text-surface-100">
             <ShieldAlert className="text-amber-500 w-5 h-5" /> Account Approvals ({pendingUsers.length})
           </h2>
           <div className="card overflow-hidden">
@@ -358,43 +358,43 @@ Please update your profile settings so your contest ratings and tasks can sync p
                       <tr key={u.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50">
                         <td className="px-4 py-3 font-medium text-surface-900 dark:text-surface-100">{u.full_name}</td>
                         <td className="px-4 py-3 text-surface-500 dark:text-surface-400">{u.email}</td>
-                        <td className="px-4 py-3 text-surface-500 text-xs">
+                        <td className="px-4 py-3 text-surface-500 dark:text-surface-400 text-xs">
                           {u.year && <span>Y: {u.year} </span>}
                           {u.branch && <span>B: {u.branch}</span>}
-                          {u.roll_number && <div className="text-[11px] text-surface-400">Roll: {u.roll_number}</div>}
+                          {u.roll_number && <div className="text-[11px] text-surface-400 dark:text-surface-500">Roll: {u.roll_number}</div>}
                         </td>
                         <td className="px-4 py-3 text-xs">
                           <div className="space-y-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-semibold text-amber-700">LC:</span>
+                              <span className="font-semibold text-amber-700 dark:text-amber-400">LC:</span>
                               {lcUrl ? (
                                 <a 
                                   href={lcUrl} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
-                                  className="text-amber-600 hover:text-amber-800 underline inline-flex items-center gap-0.5 font-medium"
+                                  className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 underline inline-flex items-center gap-0.5 font-medium"
                                 >
                                   {lcClean} <ExternalLink className="w-2.5 h-2.5" />
                                 </a>
                               ) : (
-                                <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                <span className="text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/60 px-1.5 py-0.5 rounded text-[10px] font-bold">
                                   Missing Handle
                                 </span>
                               )}
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <span className="font-semibold text-blue-700">CF:</span>
+                              <span className="font-semibold text-blue-700 dark:text-blue-400">CF:</span>
                               {cfUrl ? (
                                 <a 
                                   href={cfUrl} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
-                                  className="text-blue-600 hover:text-blue-800 underline inline-flex items-center gap-0.5 font-medium"
+                                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline inline-flex items-center gap-0.5 font-medium"
                                 >
                                   {cfClean} <ExternalLink className="w-2.5 h-2.5" />
                                 </a>
                               ) : (
-                                <span className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                <span className="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 px-1.5 py-0.5 rounded text-[10px] font-bold">
                                   Missing Handle
                                 </span>
                               )}
@@ -403,10 +403,10 @@ Please update your profile settings so your contest ratings and tasks can sync p
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-2">
-                            <button onClick={() => handleApproval(u.id, 'approved')} className="text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
+                            <button onClick={() => handleApproval(u.id, 'approved')} className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800/50 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
                               <CheckCircle className="w-4 h-4" /> Approve
                             </button>
-                            <button onClick={() => handleApproval(u.id, 'rejected')} className="text-red-600 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
+                            <button onClick={() => handleApproval(u.id, 'rejected')} className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-50 dark:bg-red-950/50 hover:bg-red-100 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800/50 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
                               <XCircle className="w-4 h-4" /> Reject
                             </button>
                           </div>
@@ -416,7 +416,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
                   })}
                   {pendingUsers.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-surface-400">No pending account approvals.</td>
+                      <td colSpan={5} className="px-4 py-6 text-center text-surface-400 dark:text-surface-500">No pending account approvals.</td>
                     </tr>
                   )}
                 </tbody>
@@ -425,28 +425,28 @@ Please update your profile settings so your contest ratings and tasks can sync p
           </div>
         </section>
 
-        {/* ─── SECTION 4: SYSTEM TOOLS ─────────────────────────────────────── */}
+        {/* ─── SECTION 3: SYSTEM TOOLS ─────────────────────────────────────── */}
         <section className="mb-12">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-surface-900 dark:text-surface-100">
             <Shield className="text-brand-500 w-5 h-5" /> System Operations
           </h2>
           
           <div className="grid md:grid-cols-2 gap-4">
             {/* Sync Leaderboard */}
-            <div className="card overflow-hidden p-6 border-emerald-200 border-2 bg-emerald-50/30 flex flex-col justify-between">
+            <div className="card overflow-hidden p-6 border-emerald-200 dark:border-emerald-800/80 border-2 bg-emerald-50/30 dark:bg-emerald-950/20 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-lg font-bold text-surface-900">Sync Leaderboard &amp; Cohort Tasks</h3>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <h3 className="text-lg font-bold text-surface-900 dark:text-surface-100">Sync Leaderboard &amp; Cohort Tasks</h3>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" /> Auto-Sync: Daily on First Visit (IST)
                   </span>
                 </div>
-                <p className="text-xs text-surface-600 mt-1 leading-relaxed">
+                <p className="text-xs text-surface-600 dark:text-surface-400 mt-1 leading-relaxed">
                   Automatically runs daily upon the <strong>first user visit of the day</strong> to roll out mentors&apos; scheduled questions and sync LeetCode &amp; Codeforces ratings, streaks, solved counts, and privacy status for all students.
                 </p>
               </div>
-              <div className="mt-4 pt-4 border-t border-emerald-100 flex items-center justify-between">
-                <span className="text-xs text-emerald-800 font-medium">Manual on-demand sync</span>
+              <div className="mt-4 pt-4 border-t border-emerald-100 dark:border-emerald-900/40 flex items-center justify-between">
+                <span className="text-xs text-emerald-800 dark:text-emerald-300 font-medium">Manual on-demand sync</span>
                 <button 
                   onClick={async () => {
                     if (!confirm('This will fetch stats from LeetCode & Codeforces for all users. It may take a minute.')) return;
@@ -455,7 +455,12 @@ Please update your profile settings so your contest ratings and tasks can sync p
                       const res = await fetch('/api/leaderboard/sync', { method: 'POST' });
                       const data = await res.json();
                       await fetchData();
-                      if (data.issues && data.issues.length > 0) {
+                      if (data.errors && data.errors.length > 0) {
+                        toast.error(
+                          'Sync Encountered Errors',
+                          `${data.errors.length} user(s) failed to update. Check server logs.`
+                        );
+                      } else if (data.issues && data.issues.length > 0) {
                         toast.warning(
                           'Sync Completed with Notices',
                           `${data.message}\n\nNotice: ${data.issues.length} profile(s) could not sync completely. Check the "Coding Profiles Requiring Attention" section above.`
@@ -485,15 +490,15 @@ Please update your profile settings so your contest ratings and tasks can sync p
             </div>
 
             {/* End of Year Progression */}
-            <div className="card overflow-hidden p-6 border-amber-200 border-2 bg-amber-50/30 flex flex-col justify-between">
+            <div className="card overflow-hidden p-6 border-amber-200 dark:border-amber-800/80 border-2 bg-amber-50/30 dark:bg-amber-950/20 flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-bold text-surface-900">End of Year Progression</h3>
-                <p className="text-xs text-surface-600 mt-1 leading-relaxed">
-                  Mass update student academic years. 1st &rarr; 2nd, 2nd &rarr; 3rd, 3rd &rarr; 4th, and 4th &rarr; <strong>"Alumni"</strong>. Admin accounts are safely excluded.
+                <h3 className="text-lg font-bold text-surface-900 dark:text-surface-100">End of Year Progression</h3>
+                <p className="text-xs text-surface-600 dark:text-surface-400 mt-1 leading-relaxed">
+                  Mass update student academic years. 1st &rarr; 2nd, 2nd &rarr; 3rd, 3rd &rarr; 4th, and 4th &rarr; <strong>&quot;Alumni&quot;</strong>. Admin accounts are safely excluded.
                 </p>
               </div>
-              <div className="mt-4 pt-4 border-t border-amber-100 flex items-center justify-between">
-                <span className="text-xs text-amber-800 font-medium">Performs batch rollover</span>
+              <div className="mt-4 pt-4 border-t border-amber-100 dark:border-amber-900/40 flex items-center justify-between">
+                <span className="text-xs text-amber-800 dark:text-amber-300 font-medium">Performs batch rollover</span>
                 <button 
                   onClick={async () => {
                     if (!confirm('Are you absolutely sure? This will shift EVERY student in the database up one year.')) return;
@@ -541,22 +546,22 @@ Please update your profile settings so your contest ratings and tasks can sync p
           </div>
         </section>
 
-        {/* ─── SECTION 5: ALL USERS WITH CODING STATUS ─────────────────────── */}
+        {/* ─── SECTION 4: ALL USERS WITH CODING STATUS ─────────────────────── */}
         <section>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
+            <h2 className="text-xl font-semibold flex items-center gap-2 text-surface-900 dark:text-surface-100">
               <Shield className="text-brand-500 w-5 h-5" /> All Members ({otherUsers.length})
             </h2>
 
             {/* Search Input */}
             <div className="relative min-w-[240px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 dark:text-surface-500" />
               <input
                 type="text"
                 placeholder="Search name, roll, email, handle…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="input-field pl-9 py-1.5 text-xs bg-white"
+                className="input-field pl-9 py-1.5 text-xs"
               />
             </div>
           </div>
@@ -565,25 +570,25 @@ Please update your profile settings so your contest ratings and tasks can sync p
           <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
             <button
               onClick={() => setUserFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${userFilter === 'all' ? 'bg-brand-600 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${userFilter === 'all' ? 'bg-brand-600 text-white' : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 hover:bg-surface-200 dark:hover:bg-surface-700'}`}
             >
               All ({otherUsers.length})
             </button>
             <button
               onClick={() => setUserFilter('issues')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${userFilter === 'issues' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${userFilter === 'issues' ? 'bg-amber-500 text-white' : 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800'}`}
             >
               <AlertTriangle className="w-3.5 h-3.5" /> Issues ({issueUsers.length})
             </button>
             <button
               onClick={() => setUserFilter('active')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${userFilter === 'active' ? 'bg-emerald-600 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${userFilter === 'active' ? 'bg-emerald-600 text-white' : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 hover:bg-surface-200 dark:hover:bg-surface-700'}`}
             >
               Active ({otherUsers.filter(u => u.approval_status === 'approved').length})
             </button>
             <button
               onClick={() => setUserFilter('deactivated')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${userFilter === 'deactivated' ? 'bg-red-600 text-white' : 'bg-surface-100 text-surface-600 hover:bg-surface-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${userFilter === 'deactivated' ? 'bg-red-600 text-white' : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 hover:bg-surface-200 dark:hover:bg-surface-700'}`}
             >
               Deactivated ({otherUsers.filter(u => u.approval_status === 'rejected').length})
             </button>
@@ -620,7 +625,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
                         <td className="px-4 py-3">
                           <div className="font-medium text-surface-900 dark:text-surface-100">{u.full_name}</div>
                           {u.roll_number && (
-                            <div className="text-[11px] text-surface-400 font-mono">{u.roll_number}</div>
+                            <div className="text-[11px] text-surface-400 dark:text-surface-500 font-mono">{u.roll_number}</div>
                           )}
                         </td>
                         <td className="px-4 py-3 font-bold text-surface-700 dark:text-surface-300 whitespace-nowrap">
@@ -631,51 +636,51 @@ Please update your profile settings so your contest ratings and tasks can sync p
                           <div className="space-y-1">
                             {/* LeetCode link */}
                             <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-amber-700 text-[10px]">LC:</span>
+                              <span className="font-bold text-amber-700 dark:text-amber-400 text-[10px]">LC:</span>
                               {lcUrl ? (
                                 <a 
                                   href={lcUrl} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
-                                  className="text-amber-700 hover:text-amber-900 underline font-medium inline-flex items-center gap-0.5"
+                                  className="text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 underline font-medium inline-flex items-center gap-0.5"
                                 >
                                   {lcClean} <ExternalLink className="w-2.5 h-2.5" />
                                 </a>
                               ) : (
-                                <span className="text-amber-600 italic text-[11px]">Not set</span>
+                                <span className="text-amber-600 dark:text-amber-400 italic text-[11px]">Not set</span>
                               )}
                             </div>
                             {/* Codeforces link */}
                             <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-blue-700 text-[10px]">CF:</span>
+                              <span className="font-bold text-blue-700 dark:text-blue-400 text-[10px]">CF:</span>
                               {cfUrl ? (
                                 <a 
                                   href={cfUrl} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
-                                  className="text-blue-700 hover:text-blue-900 underline font-medium inline-flex items-center gap-0.5"
+                                  className="text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 underline font-medium inline-flex items-center gap-0.5"
                                 >
                                   {cfClean} <ExternalLink className="w-2.5 h-2.5" />
                                 </a>
                               ) : (
-                                <span className="text-blue-600 italic text-[11px]">Not set</span>
+                                <span className="text-blue-600 dark:text-blue-400 italic text-[11px]">Not set</span>
                               )}
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3">
                           {u.role === 'admin' ? (
-                            <span className="text-surface-400 text-xs">—</span>
+                            <span className="text-surface-400 dark:text-surface-500 text-xs">—</span>
                           ) : hasAnyIssue ? (
                             <div className="space-y-1">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800">
-                                <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                                 {lcIssue && cfIssue ? 'Both Failing' : lcIssue ? 'LC Private/Error' : 'CF Error/Missing'}
                               </span>
                             </div>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Healthy
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Healthy
                             </span>
                           )}
                         </td>
@@ -702,22 +707,22 @@ Please update your profile settings so your contest ratings and tasks can sync p
                             }}
                             className={`text-[11px] font-bold rounded-lg px-2 py-1 uppercase cursor-pointer border transition-all ${
                               u.role === 'admin'
-                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
                                 : u.role === 'common_mentor'
-                                ? 'bg-purple-100 text-purple-800 border-purple-300 font-black'
-                                : 'bg-surface-50 text-surface-700 border-surface-200'
+                                ? 'bg-purple-100 text-purple-800 border-purple-300 font-black dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800'
+                                : 'bg-surface-50 text-surface-700 border-surface-200 dark:bg-surface-850 dark:text-surface-200 dark:border-surface-700'
                             }`}
                           >
-                            <option value="user">User</option>
-                            <option value="common_mentor">Common Mentor</option>
-                            <option value="admin">Admin</option>
+                            <option value="user" className="bg-white dark:bg-surface-850 text-surface-900 dark:text-surface-100">User</option>
+                            <option value="common_mentor" className="bg-white dark:bg-surface-850 text-surface-900 dark:text-surface-100">Common Mentor</option>
+                            <option value="admin" className="bg-white dark:bg-surface-850 text-surface-900 dark:text-surface-100">Admin</option>
                           </select>
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => router.push(`/profile?id=${u.id}`)}
-                              className="p-1.5 rounded-lg text-surface-500 hover:text-brand-600 hover:bg-surface-100 transition-colors"
+                              className="p-1.5 rounded-lg text-surface-500 dark:text-surface-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
                               title="Edit profile & handles as admin"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
@@ -729,7 +734,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
                                     handleApproval(u.id, 'rejected');
                                   }
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 transition-all"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 hover:bg-red-100 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800/50 transition-all"
                               >
                                 <ShieldAlert className="w-3 h-3" /> Deactivate
                               </button>
@@ -740,7 +745,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
                                     handleApproval(u.id, 'approved');
                                   }
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-all"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800/50 transition-all"
                               >
                                 <CheckCircle className="w-3 h-3" /> Reactivate
                               </button>
@@ -752,7 +757,7 @@ Please update your profile settings so your contest ratings and tasks can sync p
                   })}
                   {filteredUsers.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-6 text-center text-surface-400">
+                      <td colSpan={7} className="px-4 py-6 text-center text-surface-400 dark:text-surface-500">
                         {searchQuery ? `No members matching "${searchQuery}"` : 'No members found.'}
                       </td>
                     </tr>

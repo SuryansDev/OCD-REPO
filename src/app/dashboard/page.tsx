@@ -24,6 +24,7 @@ import {
 } from '@/lib/handles';
 import { getTodayIST, getDateOffsetIST, formatScheduledDateLabel } from '@/lib/dateUtils';
 import { getLeaderboardTier, getCFRatingTier, RatingColoredName, useRatingColorPreference } from '@/lib/ratingColors';
+import { getDashboardCache, setDashboardCache } from '@/lib/dashboardCache';
 
 const getTaskLink = (task: any) => {
   const cleanId = (task.problem_slug_or_id || '').replace(/::year:.*$/, '');
@@ -186,6 +187,7 @@ export default function Dashboard() {
 
     // ── Process critical results & unblock UI immediately ─────────────────────
     const mTasks = mTasksResult.data;
+    let finalMyTasks: Task[] = [];
     if (mTasks) {
       const taskMap = new Map<string, any>();
       mTasks.forEach((t: any) => {
@@ -197,7 +199,8 @@ export default function Dashboard() {
           taskMap.set(key, t);
         }
       });
-      setMyTasks(Array.from(taskMap.values()));
+      finalMyTasks = Array.from(taskMap.values());
+      setMyTasks(finalMyTasks);
     }
 
     const mentees = menteeshipsResult.data
@@ -211,6 +214,7 @@ export default function Dashboard() {
     setMyMentors(mentors);
 
     const aTasks = aTasksResult.data;
+    let finalAssignedTasks: any[] = [];
     if (aTasks) {
       const taskMap = new Map<string, any>();
       aTasks.forEach((t: any) => {
@@ -222,13 +226,32 @@ export default function Dashboard() {
           taskMap.set(key, t);
         }
       });
-      setAssignedTasks(Array.from(taskMap.values()));
+      finalAssignedTasks = Array.from(taskMap.values());
+      setAssignedTasks(finalAssignedTasks);
     }
 
-    if (usersResult.data) setAllUsers(usersResult.data as UserProfile[]);
-    if (reqsResult.data) setPendingRequests(reqsResult.data);
-    if (incReqsResult.data) setIncomingRequests(incReqsResult.data);
-    if (schedResult?.scheduledTasks) setScheduledTasks(schedResult.scheduledTasks);
+    const finalUsers = (usersResult.data as UserProfile[]) || [];
+    const finalPendingReqs = reqsResult.data || [];
+    const finalIncReqs = incReqsResult.data || [];
+    const finalSchedTasks = schedResult?.scheduledTasks || [];
+
+    if (usersResult.data) setAllUsers(finalUsers);
+    if (reqsResult.data) setPendingRequests(finalPendingReqs);
+    if (incReqsResult.data) setIncomingRequests(finalIncReqs);
+    if (schedResult?.scheduledTasks) setScheduledTasks(finalSchedTasks);
+
+    // Cache critical dashboard data
+    setDashboardCache({
+      profile: userProfile,
+      myTasks: finalMyTasks,
+      myMentees: mentees,
+      myMentors: mentors,
+      assignedTasks: finalAssignedTasks,
+      allUsers: finalUsers,
+      pendingRequests: finalPendingReqs,
+      incomingRequests: finalIncReqs,
+      scheduledTasks: finalSchedTasks,
+    });
 
     // ── Show the page as soon as critical data is ready ───────────────────────
     setLoading(false);
@@ -244,8 +267,10 @@ export default function Dashboard() {
       fetch('/api/leaderboard/sync').then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
 
+    let finalMenteeTasks: any[] = [];
     if (menteeTasksResult?.tasks) {
-      setMenteeAllTasks(menteeTasksResult.tasks);
+      finalMenteeTasks = menteeTasksResult.tasks;
+      setMenteeAllTasks(finalMenteeTasks);
     } else if (mentees.length > 0) {
       // Fallback: fetch directly from supabase
       const menteeIds = mentees.map((m: any) => m.id);
@@ -253,23 +278,54 @@ export default function Dashboard() {
         .from('tasks')
         .select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email, year), assigner:users!tasks_assigned_by_fkey(id, full_name, role)')
         .in('assigned_to', menteeIds);
-      if (allMenteeTasks) setMenteeAllTasks(allMenteeTasks);
+      if (allMenteeTasks) {
+        finalMenteeTasks = allMenteeTasks;
+        setMenteeAllTasks(finalMenteeTasks);
+      }
     }
 
+    let finalLbStats: any[] = [];
     if (lbResult?.stats) {
       const isProfileFilled = (u: any) => Boolean(
         u && u.roll_number && String(u.roll_number).trim() !== '' &&
         u.year && String(u.year).trim() !== ''
       );
-      const validStats = lbResult.stats.filter(
+      finalLbStats = lbResult.stats.filter(
         (s: any) => s.user && s.user.role !== 'admin' && isProfileFilled(s.user)
       );
-      setLeaderboardData(validStats);
+      setLeaderboardData(finalLbStats);
     }
-    if (lbResult?.latest_contests) setLatestContests(lbResult.latest_contests);
+    const finalContests = lbResult?.latest_contests || {};
+    if (lbResult?.latest_contests) setLatestContests(finalContests);
+
+    // Cache secondary data
+    setDashboardCache({
+      menteeAllTasks: finalMenteeTasks,
+      leaderboardData: finalLbStats,
+      latestContests: finalContests,
+    });
   }, [supabase, router]);
 
   useEffect(() => {
+    // 1. Instantly hydrate from client cache if available (runs on client mount only to prevent SSR hydration errors)
+    const cached = getDashboardCache();
+    if (cached && cached.profile) {
+      setProfile(cached.profile);
+      setMyTasks(cached.myTasks || []);
+      setMyMentees(cached.myMentees || []);
+      setMyMentors(cached.myMentors || []);
+      setAssignedTasks(cached.assignedTasks || []);
+      setMenteeAllTasks(cached.menteeAllTasks || []);
+      setScheduledTasks(cached.scheduledTasks || []);
+      setAllUsers(cached.allUsers || []);
+      setPendingRequests(cached.pendingRequests || []);
+      setIncomingRequests(cached.incomingRequests || []);
+      setLeaderboardData(cached.leaderboardData || []);
+      setLatestContests(cached.latestContests || {});
+      setLoading(false);
+    }
+
+    // 2. Silently fetch fresh data in background
     fetchData();
   }, [fetchData]);
 
@@ -429,7 +485,7 @@ export default function Dashboard() {
 
   const handleToggleSelfCheck = async (task: Task) => {
     if (togglingTaskId !== null) return;
-    const newStatus = task.status === 'Completed' ? 'Pending' : 'Completed';
+    const newStatus: 'Pending' | 'Completed' = task.status === 'Completed' ? 'Pending' : 'Completed';
     const completedAt = newStatus === 'Completed' ? new Date().toISOString() : null;
 
     setTogglingTaskId(task.id);
@@ -446,11 +502,13 @@ export default function Dashboard() {
       if (error) {
         toast.error('Task Update Failed', error.message);
       } else {
-        setMyTasks((prev) =>
-          prev.map((t) =>
+        setMyTasks((prev) => {
+          const updated = prev.map((t) =>
             t.id === task.id ? { ...t, status: newStatus, completed_at: completedAt } : t
-          )
-        );
+          );
+          setDashboardCache({ myTasks: updated });
+          return updated;
+        });
         if (newStatus === 'Completed') {
           setShowConfetti(true);
           setTimeout(() => setShowConfetti(false), 4000);
@@ -543,7 +601,11 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (res.ok) {
-        setScheduledTasks((prev) => prev.filter((t) => t.id !== id));
+        setScheduledTasks((prev) => {
+          const updated = prev.filter((t) => t.id !== id);
+          setDashboardCache({ scheduledTasks: updated });
+          return updated;
+        });
         toast.info('Scheduled Task Cancelled', 'The scheduled question was cancelled.');
       } else {
         toast.error('Failed to Cancel', data.error || 'Failed to cancel scheduled task');

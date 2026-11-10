@@ -75,10 +75,15 @@ async function fetchCFRating(handle: string, retries = 2) {
   return null;
 }
 
+interface CFSolvedResult {
+  ok: boolean;
+  count: number;
+}
+
 // ─── Codeforces: count unique solved problems ───────────────
-async function fetchCFSolved(handle: string, retries = 2): Promise<number> {
+async function fetchCFSolved(handle: string, retries = 2): Promise<CFSolvedResult> {
   const h = cleanCodeforcesHandle(handle);
-  if (!h) return 0;
+  if (!h) return { ok: false, count: 0 };
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       if (attempt > 0) {
@@ -92,9 +97,9 @@ async function fetchCFSolved(handle: string, retries = 2): Promise<number> {
       });
       if (!res.ok) continue;
       const data = await res.json().catch(() => null);
+      if (data?.comment && data.comment.toLowerCase().includes('limit')) continue;
       if (data?.status !== 'OK' || !Array.isArray(data?.result)) {
-        if (data?.comment && data.comment.toLowerCase().includes('limit')) continue;
-        return 0;
+        return { ok: false, count: 0 };
       }
       const solved = new Set<string>();
       data.result.forEach((sub: any) => {
@@ -105,12 +110,12 @@ async function fetchCFSolved(handle: string, retries = 2): Promise<number> {
           if (key) solved.add(key);
         }
       });
-      return solved.size;
+      return { ok: true, count: solved.size };
     } catch {
       // retry on network error
     }
   }
-  return 0;
+  return { ok: false, count: 0 };
 }
 
 interface LCProfileResult {
@@ -391,6 +396,251 @@ export async function rollOutScheduledTasks(supabase: any, targetDateIST?: strin
   return { rolledOutCount, totalTasksCreated, errors };
 }
 
+// ─── Compute User Stats for a single user ────────────────────
+export async function computeUserStats(supabase: any, u: any): Promise<{
+  statsPayload: Record<string, any>;
+  issue?: any;
+}> {
+  const statsPayload: Record<string, any> = {
+    user_id: u.id,
+    synced_at: new Date().toISOString(),
+    // LeetCode
+    lc_rating: 0,
+    lc_total_solved: 0,
+    lc_latest_contest_name: null,
+    lc_latest_contest_rank: null,
+    lc_latest_contest_rating: null,
+    lc_latest_contest_solved: null,
+    lc_latest_contest_date: null,
+    lc_status: 'unknown',
+    lc_error_msg: null,
+    // Codeforces
+    cf_rating: 0,
+    cf_max_rating: 0,
+    cf_total_solved: 0,
+    cf_latest_contest_name: null,
+    cf_latest_contest_rank: null,
+    cf_latest_contest_rating: null,
+    cf_latest_contest_date: null,
+    cf_status: 'unknown',
+    cf_error_msg: null,
+    // Streaks
+    current_streak: 0,
+    max_streak: 0,
+    last_solve_date: null,
+  };
+
+  const cfClean = cleanCodeforcesHandle(u.cf_handle);
+  const lcClean = cleanLeetCodeHandle(u.lc_handle);
+
+  let cfStatus: PlatformSyncStatus = 'unknown';
+  let cfErrorMsg: string | null = null;
+  let lcStatus: PlatformSyncStatus = 'unknown';
+  let lcErrorMsg: string | null = null;
+
+  // ── Codeforces ──
+  if (!cfClean) {
+    cfStatus = 'missing';
+    cfErrorMsg = u.cf_handle ? 'Placeholder or invalid Codeforces handle' : 'No Codeforces handle configured';
+  } else {
+    const [cfInfoResult, cfLatest, cfSolvedResult] = await Promise.all([
+      fetchCFInfo(cfClean),
+      fetchCFRating(cfClean),
+      fetchCFSolved(cfClean),
+    ]);
+
+    cfStatus = cfInfoResult.status;
+    cfErrorMsg = cfInfoResult.errorMsg || null;
+
+    if (cfSolvedResult.ok) {
+      statsPayload.cf_total_solved = cfSolvedResult.count;
+    }
+
+    if (cfInfoResult.ok && cfInfoResult.info) {
+      statsPayload.cf_rating = cfInfoResult.info.rating || 0;
+      statsPayload.cf_max_rating = cfInfoResult.info.maxRating || 0;
+
+      if (cfLatest) {
+        statsPayload.cf_latest_contest_name = cfLatest.contestName;
+        statsPayload.cf_latest_contest_rank = cfLatest.rank;
+        statsPayload.cf_latest_contest_rating = cfLatest.newRating;
+        statsPayload.cf_latest_contest_date = new Date(cfLatest.ratingUpdateTimeSeconds * 1000).toISOString();
+      }
+    }
+  }
+
+  // ── LeetCode ──
+  if (!lcClean) {
+    lcStatus = 'missing';
+    lcErrorMsg = u.lc_handle ? 'Placeholder or invalid LeetCode handle' : 'No LeetCode handle configured';
+  } else {
+    const [lcProfileResult, lcLatest] = await Promise.all([
+      fetchLCProfile(lcClean),
+      fetchLCContestHistory(lcClean),
+    ]);
+
+    lcStatus = lcProfileResult.status;
+    lcErrorMsg = lcProfileResult.errorMsg || null;
+
+    if (lcProfileResult.ok && lcProfileResult.profile) {
+      statsPayload.lc_rating = lcProfileResult.profile.rating || 0;
+      statsPayload.lc_total_solved = lcProfileResult.profile.totalSolved || 0;
+
+      if (lcLatest) {
+        statsPayload.lc_latest_contest_name = lcLatest.contest?.title;
+        statsPayload.lc_latest_contest_rank = lcLatest.ranking;
+        statsPayload.lc_latest_contest_rating = lcLatest.rating;
+        statsPayload.lc_latest_contest_solved = lcLatest.problemsSolved;
+        statsPayload.lc_latest_contest_date = lcLatest.contest?.startTime
+          ? new Date(lcLatest.contest.startTime * 1000).toISOString()
+          : null;
+      }
+    }
+  }
+
+  statsPayload.lc_status = lcStatus;
+  statsPayload.lc_error_msg = lcErrorMsg;
+  statsPayload.cf_status = cfStatus;
+  statsPayload.cf_error_msg = cfErrorMsg;
+
+  let issue: any = null;
+  if (lcStatus !== 'ok' || cfStatus !== 'ok') {
+    issue = {
+      user_id: u.id,
+      full_name: u.full_name,
+      email: u.email,
+      lc_handle: u.lc_handle || '',
+      lc_status: lcStatus,
+      lc_error_msg: lcErrorMsg,
+      cf_handle: u.cf_handle || '',
+      cf_status: cfStatus,
+      cf_error_msg: cfErrorMsg,
+    };
+  }
+
+  // ── Streak calculation ──
+  const { data: completedTasks } = await supabase
+    .from('tasks')
+    .select('completed_at')
+    .eq('assigned_to', u.id)
+    .eq('status', 'Completed')
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false });
+
+  if (completedTasks && completedTasks.length > 0) {
+    const uniqueDates = Array.from(
+      new Set(completedTasks.map((t: any) => new Date(t.completed_at).toISOString().split('T')[0]))
+    )
+      .sort()
+      .reverse() as string[];
+
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+    let streak = 0;
+    let checkDate: string | null = uniqueDates[0] === today || uniqueDates[0] === yesterday ? uniqueDates[0] : null;
+
+    if (checkDate) {
+      for (const d of uniqueDates) {
+        if (d === checkDate) {
+          streak++;
+          const prevDate: Date = new Date(checkDate);
+          prevDate.setDate(prevDate.getDate() - 1);
+          checkDate = prevDate.toISOString().split('T')[0];
+        } else if (d < checkDate!) {
+          break;
+        }
+      }
+    }
+
+    statsPayload.current_streak = streak;
+    statsPayload.last_solve_date = uniqueDates[0];
+
+    const { data: existing } = await supabase
+      .from('user_stats')
+      .select('max_streak')
+      .eq('user_id', u.id)
+      .single();
+
+    statsPayload.max_streak = Math.max(streak, existing?.max_streak || 0);
+  }
+
+  return { statsPayload, issue };
+}
+
+// ─── Diagnostic Columns Check & Safe Upsert ───────────────────
+let _hasDiagnosticsColumns: boolean | null = null;
+
+export async function checkDiagnosticsColumns(supabase: any): Promise<boolean> {
+  if (_hasDiagnosticsColumns !== null) return _hasDiagnosticsColumns;
+  try {
+    const { error } = await supabase.from('user_stats').select('lc_status').limit(1);
+    if (error && (error.code === 'PGRST204' || error.message?.includes('lc_status') || error.message?.includes('column'))) {
+      _hasDiagnosticsColumns = false;
+    } else {
+      _hasDiagnosticsColumns = true;
+    }
+  } catch {
+    _hasDiagnosticsColumns = false;
+  }
+  return _hasDiagnosticsColumns;
+}
+
+export function sanitizeStatsPayloadForDB(payload: Record<string, any>, hasDiagnostics: boolean) {
+  if (hasDiagnostics) return payload;
+  const copy = { ...payload };
+  delete copy.lc_status;
+  delete copy.lc_error_msg;
+  delete copy.cf_status;
+  delete copy.cf_error_msg;
+  return copy;
+}
+
+export async function upsertUserStatsSafely(supabase: any, statsPayload: Record<string, any>) {
+  const hasDiag = await checkDiagnosticsColumns(supabase);
+  const dbPayload = sanitizeStatsPayloadForDB(statsPayload, hasDiag);
+
+  let { data, error } = await supabase
+    .from('user_stats')
+    .upsert(dbPayload, { onConflict: 'user_id' });
+
+  // If error is PGRST204 (column not found), strip diagnostic fields and retry once
+  if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+    _hasDiagnosticsColumns = false;
+    const fallbackPayload = sanitizeStatsPayloadForDB(statsPayload, false);
+    const retry = await supabase
+      .from('user_stats')
+      .upsert(fallbackPayload, { onConflict: 'user_id' });
+    data = retry.data;
+    error = retry.error;
+  }
+
+  return { data, error };
+}
+
+// ─── Sync Single User Stats on Demand (e.g. handle update) ───
+export async function syncSingleUserStats(supabase: any, userId: string) {
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .select('id, full_name, email, cf_handle, lc_handle')
+    .eq('id', userId)
+    .single();
+
+  if (userError || !user) {
+    return { success: false, error: userError?.message || 'User not found' };
+  }
+
+  const { statsPayload, issue } = await computeUserStats(supabase, user);
+
+  const { error: upsertError } = await upsertUserStatsSafely(supabase, statsPayload);
+
+  if (upsertError) {
+    return { success: false, error: upsertError.message };
+  }
+
+  return { success: true, stats: statsPayload, issue };
+}
+
 // ─── Sync Leaderboard Rankings ──────────────────────────────
 export async function syncLeaderboardRankings(supabase: any) {
   // Fetch all non-admin users from users table
@@ -450,162 +700,10 @@ export async function syncLeaderboardRankings(supabase: any) {
     await Promise.all(
       batch.map(async (u: any) => {
         try {
-          const statsPayload: Record<string, any> = {
-            user_id: u.id,
-            synced_at: new Date().toISOString(),
-            lc_rating: 0,
-            lc_total_solved: 0,
-            cf_rating: 0,
-            cf_max_rating: 0,
-            cf_total_solved: 0,
-            current_streak: 0,
-            max_streak: 0,
-          };
+          const { statsPayload, issue } = await computeUserStats(supabase, u);
+          if (issue) issues.push(issue);
 
-          const cfClean = cleanCodeforcesHandle(u.cf_handle);
-          const lcClean = cleanLeetCodeHandle(u.lc_handle);
-
-          let cfStatus: PlatformSyncStatus = 'unknown';
-          let cfErrorMsg: string | null = null;
-          let lcStatus: PlatformSyncStatus = 'unknown';
-          let lcErrorMsg: string | null = null;
-
-          // ── Codeforces ──
-          if (!cfClean) {
-            cfStatus = 'missing';
-            cfErrorMsg = u.cf_handle ? 'Placeholder or invalid Codeforces handle' : 'No Codeforces handle configured';
-          } else {
-            const [cfInfoResult, cfLatest, cfSolved] = await Promise.all([
-              fetchCFInfo(cfClean),
-              fetchCFRating(cfClean),
-              fetchCFSolved(cfClean),
-            ]);
-
-            cfStatus = cfInfoResult.status;
-            cfErrorMsg = cfInfoResult.errorMsg || null;
-
-            if (cfSolved > 0) {
-              statsPayload.cf_total_solved = cfSolved;
-            }
-
-            if (cfInfoResult.ok && cfInfoResult.info) {
-              statsPayload.cf_rating = cfInfoResult.info.rating || 0;
-              statsPayload.cf_max_rating = cfInfoResult.info.maxRating || 0;
-
-              if (cfLatest) {
-                statsPayload.cf_latest_contest_name = cfLatest.contestName;
-                statsPayload.cf_latest_contest_rank = cfLatest.rank;
-                statsPayload.cf_latest_contest_rating = cfLatest.newRating;
-                statsPayload.cf_latest_contest_date = new Date(cfLatest.ratingUpdateTimeSeconds * 1000).toISOString();
-              }
-            }
-          }
-
-          // ── LeetCode ──
-          if (!lcClean) {
-            lcStatus = 'missing';
-            lcErrorMsg = u.lc_handle ? 'Placeholder or invalid LeetCode handle' : 'No LeetCode handle configured';
-          } else {
-            const [lcProfileResult, lcLatest] = await Promise.all([
-              fetchLCProfile(lcClean),
-              fetchLCContestHistory(lcClean),
-            ]);
-
-            lcStatus = lcProfileResult.status;
-            lcErrorMsg = lcProfileResult.errorMsg || null;
-
-            if (lcProfileResult.ok && lcProfileResult.profile) {
-              statsPayload.lc_rating = lcProfileResult.profile.rating || 0;
-              statsPayload.lc_total_solved = lcProfileResult.profile.totalSolved || 0;
-
-              if (lcLatest) {
-                statsPayload.lc_latest_contest_name = lcLatest.contest?.title;
-                statsPayload.lc_latest_contest_rank = lcLatest.ranking;
-                statsPayload.lc_latest_contest_rating = lcLatest.rating;
-                statsPayload.lc_latest_contest_solved = lcLatest.problemsSolved;
-                statsPayload.lc_latest_contest_date = lcLatest.contest?.startTime
-                  ? new Date(lcLatest.contest.startTime * 1000).toISOString()
-                  : null;
-              }
-            }
-          }
-
-          if (lcStatus !== 'ok' || cfStatus !== 'ok') {
-            issues.push({
-              user_id: u.id,
-              full_name: u.full_name,
-              email: u.email,
-              lc_handle: u.lc_handle || '',
-              lc_status: lcStatus,
-              lc_error_msg: lcErrorMsg,
-              cf_handle: u.cf_handle || '',
-              cf_status: cfStatus,
-              cf_error_msg: cfErrorMsg,
-            });
-          }
-
-          // ── Streak calculation ──
-          const { data: completedTasks } = await supabase
-            .from('tasks')
-            .select('completed_at')
-            .eq('assigned_to', u.id)
-            .eq('status', 'Completed')
-            .not('completed_at', 'is', null)
-            .order('completed_at', { ascending: false });
-
-          if (completedTasks && completedTasks.length > 0) {
-            const uniqueDates = Array.from(
-              new Set(completedTasks.map((t: any) => new Date(t.completed_at).toISOString().split('T')[0]))
-            )
-              .sort()
-              .reverse() as string[];
-
-            const today = new Date().toISOString().split('T')[0];
-            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-            let streak = 0;
-            let checkDate: string | null = uniqueDates[0] === today || uniqueDates[0] === yesterday ? uniqueDates[0] : null;
-
-            if (checkDate) {
-              for (const d of uniqueDates) {
-                if (d === checkDate) {
-                  streak++;
-                  const prevDate: Date = new Date(checkDate);
-                  prevDate.setDate(prevDate.getDate() - 1);
-                  checkDate = prevDate.toISOString().split('T')[0];
-                } else if (d < checkDate!) {
-                  break;
-                }
-              }
-            }
-
-            statsPayload.current_streak = streak;
-            statsPayload.last_solve_date = uniqueDates[0];
-
-            const { data: existing } = await supabase
-              .from('user_stats')
-              .select('max_streak')
-              .eq('user_id', u.id)
-              .single();
-
-            statsPayload.max_streak = Math.max(streak, existing?.max_streak || 0);
-          }
-
-          // Preserve existing cf_total_solved if API returned 0 temporarily
-          if (!statsPayload.cf_total_solved || statsPayload.cf_total_solved === 0) {
-            const { data: existing } = await supabase
-              .from('user_stats')
-              .select('cf_total_solved')
-              .eq('user_id', u.id)
-              .single();
-            if (existing?.cf_total_solved) {
-              statsPayload.cf_total_solved = existing.cf_total_solved;
-            }
-          }
-
-          const { error: upsertError } = await supabase
-            .from('user_stats')
-            .upsert(statsPayload, { onConflict: 'user_id' });
+          const { error: upsertError } = await upsertUserStatsSafely(supabase, statsPayload);
 
           if (upsertError) {
             errors.push(`${u.id}: ${upsertError.message}`);
@@ -655,6 +753,10 @@ export async function executeDailySync(options?: {
   const message = `Auto-sync complete: Synced ${rankingsResult.synced}/${rankingsResult.total} users.${rolloutMsg}${issueMsg}`;
 
   const allErrors = [...rolloutResult.errors, ...rankingsResult.errors];
+
+  if (allErrors.length > 0) {
+    console.error(`[AutoRefresh] Daily sync encountered ${allErrors.length} errors (showing first 5):`, allErrors.slice(0, 5));
+  }
 
   console.log(`[AutoRefresh] Finished daily sync: ${message}`);
 
