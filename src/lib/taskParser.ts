@@ -1,5 +1,5 @@
 import type { Platform } from '@/lib/types';
-import { extractCsesTaskId } from '@/lib/cses';
+import { extractCsesTaskId, getCsesTaskUrl, formatCsesTaskTitle } from '@/lib/cses';
 
 export interface ParsedTaskLink {
   platform: Platform;
@@ -91,4 +91,59 @@ export function parseTaskLink(link: string): ParsedTaskLink | null {
 
   return null;
 }
+
+/**
+ * Returns the external web link to a problem or video for any platform.
+ */
+export function getTaskLink(task: { platform: string; problem_slug_or_id: string }): string {
+  const cleanId = (task.problem_slug_or_id || '').replace(/::year:.*$/, '');
+  if (task.platform === 'LeetCode') {
+    return `https://leetcode.com/problems/${cleanId}`;
+  } else if (task.platform === 'Codeforces') {
+    const match = cleanId.match(/^(\d+)([A-Za-z]\d*)$/);
+    if (match) {
+      return `https://codeforces.com/problemset/problem/${match[1]}/${match[2]}`;
+    } else if (cleanId.includes('/')) {
+      const parts = cleanId.split('/');
+      return `https://codeforces.com/problemset/problem/${parts[0]}/${parts[1]}`;
+    }
+    return `https://codeforces.com/problemset/problem/${cleanId}`;
+  } else if (task.platform === 'YouTube') {
+    return `https://www.youtube.com/watch?v=${cleanId}`;
+  } else if (task.platform === 'CSES') {
+    return getCsesTaskUrl(cleanId);
+  }
+  return '#';
+}
+
+/**
+ * Formats a problem slug or identifier into a human-readable title.
+ */
+export function formatProblemTitle(slugOrId: string, platform: string): string {
+  const cleanSlug = (slugOrId || '').replace(/::year:.*$/, '');
+  if (platform === 'LeetCode') {
+    return cleanSlug
+      .split('-')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  } else if (platform === 'YouTube') {
+    return `Video: ${cleanSlug}`;
+  } else if (platform === 'CSES') {
+    return formatCsesTaskTitle(cleanSlug);
+  }
+  return cleanSlug;
+}
+
+/**
+ * Extracts target year from either the target_year column or legacy ::year: slug suffix.
+ */
+export function extractTargetYear(task: { target_year?: string | null; problem_slug_or_id: string }): string | null {
+  if (task.target_year) return task.target_year;
+  if (task.problem_slug_or_id && task.problem_slug_or_id.includes('::year:')) {
+    const parts = task.problem_slug_or_id.split('::year:');
+    return parts[1] || null;
+  }
+  return null;
+}
+
 

@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import PlatformBadge from '@/components/PlatformBadge';
+import ScheduleCalendar from '@/components/ScheduleCalendar';
 import Confetti from '@/components/Confetti';
 import { toast } from '@/components/Toast';
 import { formatCsesTaskTitle, getCsesTaskUrl } from '@/lib/cses';
@@ -83,6 +84,7 @@ export default function Dashboard() {
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string>(() => getTodayIST());
   const [targetYear, setTargetYear] = useState<string>('');
   const [deletingScheduledId, setDeletingScheduledId] = useState<number | null>(null);
+  const problemInputRef = useRef<HTMLInputElement>(null);
 
   // Request mentor state
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
@@ -2370,6 +2372,7 @@ export default function Dashboard() {
                   <div className="relative">
                     <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
                     <input
+                      ref={problemInputRef}
                       type="text"
                       placeholder="https://leetcode.com/... or https://cses.fi/problemset/task/1068 or youtu.be/..."
                       value={taskLink}
@@ -2474,75 +2477,25 @@ export default function Dashboard() {
                 )}
               </form>
 
-              {/* Scheduled Questions Queue (Next 30 Days) */}
+              {/* 30-Day Rollout Calendar & Scheduled Questions View */}
               <div className="mt-6 pt-5 border-t border-brand-200 dark:border-brand-900/60">
-                <div className="flex items-center justify-between mb-2.5">
-                  <h4 className="text-xs font-bold text-surface-900 dark:text-surface-100 uppercase tracking-wider flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
-                    Scheduled Questions Queue
-                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-brand-100 dark:bg-brand-950 text-brand-800 dark:text-brand-300">
-                      {scheduledTasks.length}
-                    </span>
-                  </h4>
-                  <span className="text-[10px] text-surface-400 font-medium">Rolls out daily on first visit</span>
-                </div>
-
-                {scheduledTasks.length === 0 ? (
-                  <div className="p-3 bg-white/60 dark:bg-surface-850/60 rounded-xl border border-dashed border-brand-200 dark:border-brand-900/60 text-center text-xs text-surface-500 dark:text-surface-400">
-                    No questions scheduled for upcoming days. Pick an upcoming date above to queue questions for the month ahead!
-                  </div>
-                ) : (
-                  <ul className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {scheduledTasks.map((task) => {
-                      const taskTargetYear = task.target_year || (task.problem_slug_or_id.includes('::year:') ? task.problem_slug_or_id.split('::year:')[1] : null);
-                      return (
-                        <li
-                          key={task.id}
-                          className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-white dark:bg-surface-850 border border-brand-100 dark:border-brand-900/60 shadow-2xs hover:border-brand-300 dark:hover:border-brand-700 transition-all"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-semibold text-brand-800 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/80 border border-brand-200 dark:border-brand-800 px-2 py-0.5 rounded text-[11px] whitespace-nowrap">
-                              {formatScheduledDateLabel(task.scheduled_date, todayIST)}
-                            </span>
-                            {taskTargetYear && (
-                              <span className="font-semibold text-purple-800 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap">
-                                {taskTargetYear === 'all' ? 'All Years' : `Year ${taskTargetYear}`}
-                              </span>
-                            )}
-                            <span className="font-bold text-surface-900 dark:text-surface-100 truncate">
-                              {formatProblemTitle(task.problem_slug_or_id, task.platform)}
-                            </span>
-                            <a
-                              href={getTaskLink(task)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-surface-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors shrink-0"
-                              title="Open Problem Link"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                            <PlatformBadge platform={task.platform} />
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteScheduledTask(task.id)}
-                              disabled={deletingScheduledId === task.id}
-                              className="p-1 rounded text-surface-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                              title="Cancel scheduled question"
-                            >
-                              {deletingScheduledId === task.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
-                              ) : (
-                                <Trash2 className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+                <ScheduleCalendar
+                  todayIST={todayIST}
+                  maxScheduleDateIST={maxScheduleDateIST}
+                  selectedDate={selectedScheduleDate}
+                  onSelectDate={(d) => setSelectedScheduleDate(d)}
+                  scheduledTasks={scheduledTasks}
+                  allCohortTasks={allCohortTasks}
+                  allUsers={allUsers}
+                  onDeleteScheduledTask={handleDeleteScheduledTask}
+                  deletingScheduledId={deletingScheduledId}
+                  isCommonMentorOrAdmin={isCommonMentorOrAdmin}
+                  currentUserId={profile?.id}
+                  onQuickScheduleFocus={() => {
+                    problemInputRef.current?.focus();
+                    problemInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }}
+                />
               </div>
 
               {/* Recently Assigned Active Tasks */}

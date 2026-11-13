@@ -14,6 +14,11 @@ export interface ScheduledTask {
   status: ScheduledTaskStatus;
   created_at: string;
   rolled_out_at?: string | null;
+  mentor?: {
+    id: string;
+    full_name: string;
+    role?: string;
+  };
 }
 
 export interface UserProfile {

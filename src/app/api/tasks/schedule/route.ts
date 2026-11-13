@@ -33,14 +33,44 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Note: rollout is handled by the leaderboard API on page load — no need to repeat it here.
+  // Fetch user role to determine viewing scope
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single();
 
-  const { data: scheduledTasks, error } = await supabase
+  const userRole = userProfile?.role || 'user';
+  const isCommonMentorOrAdmin = userRole === 'common_mentor' || userRole === 'admin';
+
+  const adminClient = createAdminSupabaseClient();
+
+  // Admins can see all scheduled tasks.
+  // Both Common Mentors and standard Mentors should only see:
+  // 1) All year-wide tasks (where target_year is not null or problem_slug_or_id has ::year:)
+  // 2) Tasks they personally scheduled (mentor_id = user.id)
+  // Common mentors should NEVER see private 1-on-1 cohort tasks scheduled by other mentors.
+  let query = adminClient
     .from('scheduled_tasks')
-    .select('*')
-    .eq('mentor_id', user.id)
-    .eq('status', 'pending')
-    .order('scheduled_date', { ascending: true });
+    .select('*, mentor:users!scheduled_tasks_mentor_id_fkey(id, full_name, role)')
+    .eq('status', 'pending');
+
+  if (userRole !== 'admin') {
+    query = query.or(`mentor_id.eq.${user.id},target_year.not.is.null,problem_slug_or_id.ilike.%::year:%`);
+  }
+
+  let { data: scheduledTasks, error } = await query.order('scheduled_date', { ascending: true });
+
+  // Safe fallback if relationship join is unavailable
+  if (error && (error.code === 'PGRST200' || error.message?.includes('relationship') || error.message?.includes('target_year'))) {
+    let fallbackQuery = adminClient.from('scheduled_tasks').select('*').eq('status', 'pending');
+    if (userRole !== 'admin') {
+      fallbackQuery = fallbackQuery.or(`mentor_id.eq.${user.id},target_year.not.is.null,problem_slug_or_id.ilike.%::year:%`);
+    }
+    const fallbackRes = await fallbackQuery.order('scheduled_date', { ascending: true });
+    scheduledTasks = fallbackRes.data;
+    error = fallbackRes.error;
+  }
 
   if (error) {
     if (error.code === '42P01' || error.message?.includes('scheduled_tasks')) {
@@ -305,12 +335,27 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  const userRole = userProfile?.role || 'user';
+  const isCommonMentorOrAdmin = userRole === 'common_mentor' || userRole === 'admin';
+
+  const adminClient = createAdminSupabaseClient();
+  let query = adminClient
     .from('scheduled_tasks')
     .delete()
     .eq('id', id)
-    .eq('mentor_id', user.id)
     .eq('status', 'pending');
+
+  if (!isCommonMentorOrAdmin) {
+    query = query.eq('mentor_id', user.id);
+  }
+
+  const { error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
