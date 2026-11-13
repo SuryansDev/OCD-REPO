@@ -176,11 +176,82 @@ export default function ScheduleCalendar({
     return counts;
   }, [pendingScheduledTasks]);
 
-  // Active tasks for selected date (e.g. today or past days in allCohortTasks)
-  const activeTasksForSelectedDate = useMemo(() => {
+  // User map to look up student academic year
+  const userYearMap = useMemo(() => {
+    const map = new Map<string, string>();
+    allUsers.forEach((u) => {
+      if (u.id && u.year) {
+        map.set(u.id, String(u.year));
+      }
+    });
+    return map;
+  }, [allUsers]);
+
+  // Group active rolled-out tasks by date, then by unique problem
+  const activeProblemsByDate = useMemo(() => {
+    const dateMap = new Map<string, Map<string, {
+      key: string;
+      platform: Platform;
+      problem_slug_or_id: string;
+      totalAssigned: number;
+      completedCount: number;
+      targetYears: Set<string>;
+      sampleTask: Task;
+    }>>();
+
+    allCohortTasks.forEach((t) => {
+      if (!t.assigned_date) return;
+
+      let problemsMap = dateMap.get(t.assigned_date);
+      if (!problemsMap) {
+        problemsMap = new Map();
+        dateMap.set(t.assigned_date, problemsMap);
+      }
+
+      const problemKey = `${t.platform}-${t.problem_slug_or_id}`;
+      let group = problemsMap.get(problemKey);
+      if (!group) {
+        group = {
+          key: problemKey,
+          platform: t.platform,
+          problem_slug_or_id: t.problem_slug_or_id,
+          totalAssigned: 0,
+          completedCount: 0,
+          targetYears: new Set<string>(),
+          sampleTask: t,
+        };
+        problemsMap.set(problemKey, group);
+      }
+
+      group.totalAssigned += 1;
+      if (t.status === 'Completed') {
+        group.completedCount += 1;
+      }
+      const studentYear = userYearMap.get(t.assigned_to);
+      if (studentYear) {
+        group.targetYears.add(studentYear);
+      }
+    });
+
+    return dateMap;
+  }, [allCohortTasks, userYearMap]);
+
+  // Active unique problems on the currently selected date
+  const activeProblemsForSelectedDate = useMemo(() => {
     if (!selectedDate) return [];
-    return allCohortTasks.filter((t) => t.assigned_date === selectedDate);
-  }, [allCohortTasks, selectedDate]);
+    const problemsMap = activeProblemsByDate.get(selectedDate);
+    if (!problemsMap) return [];
+
+    let list = Array.from(problemsMap.values());
+    if (selectedYearFilter !== 'all') {
+      if (selectedYearFilter === 'cohort') {
+        list = list.filter((p) => p.targetYears.size === 0);
+      } else {
+        list = list.filter((p) => p.targetYears.has(selectedYearFilter));
+      }
+    }
+    return list;
+  }, [activeProblemsByDate, selectedDate, selectedYearFilter]);
 
   // Today's month and max schedule month bounds
   const [tY, tM] = useMemo(() => {
@@ -249,6 +320,15 @@ export default function ScheduleCalendar({
       isIn30Days: boolean;
       isBeyond30Days: boolean;
       tasks: ScheduledTask[];
+      activeProblems: Array<{
+        key: string;
+        platform: Platform;
+        problem_slug_or_id: string;
+        totalAssigned: number;
+        completedCount: number;
+        targetYears: Set<string>;
+        sampleTask: Task;
+      }>;
       hasMatchingFilterTask: boolean;
     }> = [];
 
@@ -258,6 +338,10 @@ export default function ScheduleCalendar({
       const m = displayedMonth === 0 ? 12 : displayedMonth;
       const y = displayedMonth === 0 ? displayedYear - 1 : displayedYear;
       const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      const dayTasks = tasksByDate.get(dateStr) || [];
+      const dayActiveMap = activeProblemsByDate.get(dateStr);
+      const dayActiveProblems = dayActiveMap ? Array.from(dayActiveMap.values()) : [];
+
       days.push({
         dateStr,
         dayNum,
@@ -267,7 +351,8 @@ export default function ScheduleCalendar({
         isPast: dateStr < todayIST,
         isIn30Days: dateStr >= todayIST && dateStr <= maxScheduleDateIST,
         isBeyond30Days: dateStr > maxScheduleDateIST,
-        tasks: tasksByDate.get(dateStr) || [],
+        tasks: dayTasks,
+        activeProblems: dayActiveProblems,
         hasMatchingFilterTask: false,
       });
     }
@@ -276,14 +361,20 @@ export default function ScheduleCalendar({
     for (let d = 1; d <= totalDaysInMonth; d++) {
       const dateStr = `${displayedYear}-${String(displayedMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const dayTasks = tasksByDate.get(dateStr) || [];
+      const dayActiveMap = activeProblemsByDate.get(dateStr);
+      const dayActiveProblems = dayActiveMap ? Array.from(dayActiveMap.values()) : [];
+      const totalDayQuestions = dayTasks.length + dayActiveProblems.length;
 
       // Check if tasks match selected year filter
       const matchesFilter = selectedYearFilter === 'all' 
-        ? dayTasks.length > 0 
+        ? totalDayQuestions > 0 
         : dayTasks.some((t) => {
             const yr = extractTargetYear(t);
             if (selectedYearFilter === 'cohort') return !yr;
             return yr === selectedYearFilter || yr === 'all';
+          }) || dayActiveProblems.some((p) => {
+            if (selectedYearFilter === 'cohort') return p.targetYears.size === 0;
+            return p.targetYears.has(selectedYearFilter);
           });
 
       days.push({
@@ -296,6 +387,7 @@ export default function ScheduleCalendar({
         isIn30Days: dateStr >= todayIST && dateStr <= maxScheduleDateIST,
         isBeyond30Days: dateStr > maxScheduleDateIST,
         tasks: dayTasks,
+        activeProblems: dayActiveProblems,
         hasMatchingFilterTask: matchesFilter,
       });
     }
@@ -306,6 +398,10 @@ export default function ScheduleCalendar({
       const m = displayedMonth === 11 ? 1 : displayedMonth + 2;
       const y = displayedMonth === 11 ? displayedYear + 1 : displayedYear;
       const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      const dayTasks = tasksByDate.get(dateStr) || [];
+      const dayActiveMap = activeProblemsByDate.get(dateStr);
+      const dayActiveProblems = dayActiveMap ? Array.from(dayActiveMap.values()) : [];
+
       days.push({
         dateStr,
         dayNum: i,
@@ -315,13 +411,14 @@ export default function ScheduleCalendar({
         isPast: dateStr < todayIST,
         isIn30Days: dateStr >= todayIST && dateStr <= maxScheduleDateIST,
         isBeyond30Days: dateStr > maxScheduleDateIST,
-        tasks: tasksByDate.get(dateStr) || [],
+        tasks: dayTasks,
+        activeProblems: dayActiveProblems,
         hasMatchingFilterTask: false,
       });
     }
 
     return days;
-  }, [displayedYear, displayedMonth, todayIST, maxScheduleDateIST, selectedDate, tasksByDate, selectedYearFilter]);
+  }, [displayedYear, displayedMonth, todayIST, maxScheduleDateIST, selectedDate, tasksByDate, activeProblemsByDate, selectedYearFilter]);
 
   // Selected date scheduled tasks
   const selectedDateTasks = useMemo(() => {
@@ -592,7 +689,8 @@ export default function ScheduleCalendar({
                 const isIn30Days = day.isIn30Days;
                 const isPast = day.isPast;
                 const isCurrentMonth = day.isCurrentMonth;
-                const hasTasks = day.tasks.length > 0;
+                const totalDayQuestions = day.tasks.length + day.activeProblems.length;
+                const hasTasks = totalDayQuestions > 0;
 
                 const isSelectable = !isPast && !day.isBeyond30Days && (isIn30Days || isToday);
 
@@ -621,16 +719,43 @@ export default function ScheduleCalendar({
 
                 // Compute unique years present on this day (exactly one badge per year)
                 const uniqueAudiences = Array.from(
-                  day.tasks.reduce((map, task) => {
-                    const yr = extractTargetYear(task);
-                    const meta = getAudienceMeta(yr);
-                    if (!map.has(meta.key)) {
-                      map.set(meta.key, { meta, count: 1 });
-                    } else {
-                      map.get(meta.key)!.count += 1;
-                    }
-                    return map;
-                  }, new Map<string, { meta: ReturnType<typeof getAudienceMeta>; count: number }>()).values()
+                  (() => {
+                    const audienceMap = new Map<string, { meta: ReturnType<typeof getAudienceMeta>; count: number }>();
+
+                    // From pending scheduled tasks
+                    day.tasks.forEach((task) => {
+                      const yr = extractTargetYear(task);
+                      const meta = getAudienceMeta(yr);
+                      if (!audienceMap.has(meta.key)) {
+                        audienceMap.set(meta.key, { meta, count: 1 });
+                      } else {
+                        audienceMap.get(meta.key)!.count += 1;
+                      }
+                    });
+
+                    // From active rolled-out questions
+                    day.activeProblems.forEach((prob) => {
+                      if (prob.targetYears.size > 0) {
+                        prob.targetYears.forEach((yr) => {
+                          const meta = getAudienceMeta(yr);
+                          if (!audienceMap.has(meta.key)) {
+                            audienceMap.set(meta.key, { meta, count: 1 });
+                          } else {
+                            audienceMap.get(meta.key)!.count += 1;
+                          }
+                        });
+                      } else {
+                        const meta = getAudienceMeta(null);
+                        if (!audienceMap.has(meta.key)) {
+                          audienceMap.set(meta.key, { meta, count: 1 });
+                        } else {
+                          audienceMap.get(meta.key)!.count += 1;
+                        }
+                      }
+                    });
+
+                    return audienceMap.values();
+                  })()
                 ).sort((a, b) => {
                   const order: Record<string, number> = { '1': 1, '2': 2, '3': 3, '4': 4, all: 5, cohort: 6 };
                   return (order[a.meta.key] || 99) - (order[b.meta.key] || 99);
@@ -652,7 +777,7 @@ export default function ScheduleCalendar({
                         ? `${day.dateStr} (Past date — cannot schedule in the past)`
                         : day.isBeyond30Days
                         ? `${day.dateStr} (Beyond 30-day window)`
-                        : `${day.dateStr}${isToday ? ' (Today)' : ''}${hasTasks ? ` • ${day.tasks.length} question(s) scheduled across ${uniqueAudiences.length} year group(s)` : ''}`
+                        : `${day.dateStr}${isToday ? ' (Today)' : ''}${hasTasks ? ` • ${totalDayQuestions} question(s) across ${uniqueAudiences.length} group(s)` : ''}`
                     }
                   >
                     {/* Top Row: Date Number and Status Pills */}
@@ -681,12 +806,12 @@ export default function ScheduleCalendar({
                       )}
 
                       {/* Total Question Count if multiple questions */}
-                      {hasTasks && day.tasks.length > 1 && (
+                      {hasTasks && totalDayQuestions > 1 && (
                         <span 
                           className="text-[9px] font-semibold px-1 py-0.2 rounded-full bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400"
-                          title={`${day.tasks.length} questions scheduled`}
+                          title={`${totalDayQuestions} questions scheduled/assigned`}
                         >
-                          {day.tasks.length} Qs
+                          {totalDayQuestions} Qs
                         </span>
                       )}
                     </div>
@@ -723,7 +848,15 @@ export default function ScheduleCalendar({
 
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-surface-500 dark:text-surface-400">
-                    {selectedDateTasks.length} {selectedDateTasks.length === 1 ? 'question' : 'questions'} scheduled
+                    {selectedDateTasks.length > 0 && activeProblemsForSelectedDate.length > 0 ? (
+                      `${selectedDateTasks.length} scheduled • ${activeProblemsForSelectedDate.length} active`
+                    ) : selectedDateTasks.length > 0 ? (
+                      `${selectedDateTasks.length} ${selectedDateTasks.length === 1 ? 'question' : 'questions'} scheduled`
+                    ) : activeProblemsForSelectedDate.length > 0 ? (
+                      `${activeProblemsForSelectedDate.length} active ${activeProblemsForSelectedDate.length === 1 ? 'question' : 'questions'}`
+                    ) : (
+                      '0 questions scheduled'
+                    )}
                   </span>
                 </div>
               </div>
@@ -796,7 +929,7 @@ export default function ScheduleCalendar({
                     );
                   })}
                 </div>
-              ) : (
+              ) : activeProblemsForSelectedDate.length === 0 ? (
                 <div className="p-4 rounded-xl bg-surface-50/60 dark:bg-surface-850/60 border border-dashed border-surface-200 dark:border-surface-800 text-center flex flex-col items-center justify-center gap-1.5">
                   <CalendarIcon className="w-5 h-5 text-surface-300 dark:text-surface-600" />
                   <p className="text-xs font-semibold text-surface-600 dark:text-surface-400">
@@ -815,37 +948,72 @@ export default function ScheduleCalendar({
                     </button>
                   )}
                 </div>
-              )}
+              ) : null}
 
-              {/* Active Cohort Tasks Assigned on this Date (if viewing today or past days) */}
-              {activeTasksForSelectedDate.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-surface-100 dark:border-surface-800/60">
+              {/* Active Questions Rolled Out / Assigned on this Date */}
+              {activeProblemsForSelectedDate.length > 0 && (
+                <div className={selectedDateTasks.length > 0 ? "mt-4 pt-3 border-t border-surface-100 dark:border-surface-800/60" : "mt-2"}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active Cohort Tasks on this Date ({activeTasksForSelectedDate.length})
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-surface-600 dark:text-surface-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Active Questions on this Date ({activeProblemsForSelectedDate.length})
+                    </span>
+                    <span className="text-[10px] text-surface-400 dark:text-surface-500 font-medium">
+                      Assigned to students
                     </span>
                   </div>
-                  <div className="space-y-1.5">
-                    {activeTasksForSelectedDate.slice(0, 4).map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex items-center justify-between p-2 rounded-lg bg-surface-100/50 dark:bg-surface-800/50 text-xs border border-surface-200/50 dark:border-surface-700/50"
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <PlatformBadge platform={task.platform} />
-                          <span className="font-semibold text-surface-800 dark:text-surface-200 truncate">
-                            {formatProblemTitle(task.problem_slug_or_id, task.platform)}
-                          </span>
+                  <div className="space-y-2">
+                    {activeProblemsForSelectedDate.map((group) => {
+                      const allDone = group.completedCount === group.totalAssigned && group.totalAssigned > 0;
+                      return (
+                        <div
+                          key={group.key}
+                          className="flex items-center justify-between p-3 rounded-xl bg-surface-50 dark:bg-surface-850 border border-surface-200 dark:border-surface-800 hover:border-brand-300 dark:hover:border-brand-700 shadow-2xs transition-all text-xs"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                            <PlatformBadge platform={group.platform} />
+
+                            {Array.from(group.targetYears).sort().map((yr) => (
+                              <span
+                                key={yr}
+                                className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0"
+                              >
+                                Y{yr}
+                              </span>
+                            ))}
+
+                            <div className="min-w-0 flex items-center gap-2">
+                              <span className="font-bold text-surface-900 dark:text-surface-100 text-xs sm:text-sm truncate">
+                                {formatProblemTitle(group.problem_slug_or_id, group.platform)}
+                              </span>
+                              <a
+                                href={getTaskLink(group.sampleTask)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-surface-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors shrink-0"
+                                title="Open problem link in new tab"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0 ml-2">
+                            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                              allDone
+                                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                : group.completedCount > 0
+                                ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                : 'bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-400 border-surface-200 dark:border-surface-700'
+                            }`}>
+                              {group.totalAssigned === 1
+                                ? (group.completedCount === 1 ? 'Completed' : 'Pending')
+                                : `${group.completedCount}/${group.totalAssigned} solved`
+                              }
+                            </span>
+                          </div>
                         </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          task.status === 'Completed'
-                            ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
-                            : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
-                        }`}>
-                          {task.status}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
