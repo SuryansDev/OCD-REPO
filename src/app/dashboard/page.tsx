@@ -2251,7 +2251,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className={`grid gap-8 ${isCommonMentorOrAdmin || myMentees.length > 0 ? 'md:grid-cols-2' : 'max-w-2xl mx-auto'}`}>
 
             {/* Request Mentor */}
             <div className="card p-6 flex flex-col justify-between">
@@ -2321,8 +2321,9 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Assign or Schedule Tasks */}
-            <div className="card p-6 border-brand-200 dark:border-brand-800/80 border-2 bg-brand-50/30 dark:bg-brand-950/20 flex flex-col">
+            {/* Assign or Schedule Tasks (Mentors, Common Mentors & Admins only) */}
+            {(isCommonMentorOrAdmin || myMentees.length > 0) && (
+              <div className="card p-6 border-brand-200 dark:border-brand-800/80 border-2 bg-brand-50/30 dark:bg-brand-950/20 flex flex-col">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-2">
                 <div>
                   <h3 className="text-lg font-bold text-surface-900 dark:text-surface-100">Assign or Schedule Question</h3>
@@ -2540,6 +2541,7 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
+            )}
 
           </div>
         </section>

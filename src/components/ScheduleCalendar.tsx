@@ -362,6 +362,17 @@ export default function ScheduleCalendar({
     return selectedDate;
   }, [selectedDate]);
 
+  // Determine whether the logged-in user has permission to cancel/delete a scheduled task
+  const canDeleteTask = (task: ScheduledTask) => {
+    if (!currentUserId) return false;
+    const isOwner = task.mentor_id === currentUserId;
+    const targetYear = extractTargetYear(task);
+    const isYearWide = !!targetYear;
+    // Owner can always cancel their own question.
+    // Common Mentor or Admin can manage year-wide curriculum questions.
+    return isOwner || (isCommonMentorOrAdmin && isYearWide);
+  };
+
   return (
     <div className={`transition-all duration-200 ${isExpanded ? 'fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto' : ''}`}>
       <div className={`w-full bg-white dark:bg-surface-900 rounded-2xl border border-brand-200 dark:border-brand-900/70 shadow-xs flex flex-col ${isExpanded ? 'max-w-4xl max-h-[92vh] overflow-y-auto p-6 border-2 shadow-2xl' : 'p-4 sm:p-5'}`}>
@@ -761,7 +772,7 @@ export default function ScheduleCalendar({
 
                         <div className="flex items-center gap-2.5 shrink-0 ml-2">
                           <PlatformBadge platform={task.platform} />
-                          {onDeleteScheduledTask && (
+                          {onDeleteScheduledTask && canDeleteTask(task) && (
                             <button
                               type="button"
                               onClick={() => {
@@ -911,7 +922,7 @@ export default function ScheduleCalendar({
 
                       <div className="flex items-center gap-2 shrink-0 ml-2">
                         <PlatformBadge platform={task.platform} />
-                        {onDeleteScheduledTask && (
+                        {onDeleteScheduledTask && canDeleteTask(task) && (
                           <button
                             type="button"
                             onClick={() => {

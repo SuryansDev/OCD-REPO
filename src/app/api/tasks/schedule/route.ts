@@ -41,22 +41,43 @@ export async function GET(request: NextRequest) {
     .single();
 
   const userRole = userProfile?.role || 'user';
-  const isCommonMentorOrAdmin = userRole === 'common_mentor' || userRole === 'admin';
+  const isAdmin = userRole === 'admin';
+  const isCommonMentor = userRole === 'common_mentor';
 
   const adminClient = createAdminSupabaseClient();
 
-  // Admins can see all scheduled tasks.
-  // Both Common Mentors and standard Mentors should only see:
-  // 1) All year-wide tasks (where target_year is not null or problem_slug_or_id has ::year:)
-  // 2) Tasks they personally scheduled (mentor_id = user.id)
-  // Common mentors should NEVER see private 1-on-1 cohort tasks scheduled by other mentors.
+  // If regular user (student), check if they have any accepted mentees
+  let isCohortMentor = false;
+  if (!isAdmin && !isCommonMentor) {
+    const { count } = await adminClient
+      .from('mentorships')
+      .select('id', { count: 'exact', head: true })
+      .eq('mentor_id', user.id);
+
+    isCohortMentor = (count || 0) > 0;
+  }
+
+  // 1. Regular students (not admin, not common mentor, no mentees):
+  // MUST NEVER see upcoming scheduled tasks before rollout! Return empty array immediately.
+  if (!isAdmin && !isCommonMentor && !isCohortMentor) {
+    return NextResponse.json({ scheduledTasks: [] });
+  }
+
   let query = adminClient
     .from('scheduled_tasks')
     .select('*, mentor:users!scheduled_tasks_mentor_id_fkey(id, full_name, role)')
     .eq('status', 'pending');
 
-  if (userRole !== 'admin') {
+  if (isAdmin) {
+    // Admins see all pending scheduled tasks
+  } else if (isCommonMentor) {
+    // Common Mentors see all year-wide questions + questions they personally scheduled.
+    // They do NOT see other mentors' private 1-on-1 cohort tasks!
     query = query.or(`mentor_id.eq.${user.id},target_year.not.is.null,problem_slug_or_id.ilike.%::year:%`);
+  } else {
+    // Standard cohort mentors ONLY see questions they personally scheduled for their own mentees.
+    // They can NEVER see Common Mentor's upcoming questions before rollout!
+    query = query.eq('mentor_id', user.id);
   }
 
   let { data: scheduledTasks, error } = await query.order('scheduled_date', { ascending: true });
@@ -64,8 +85,12 @@ export async function GET(request: NextRequest) {
   // Safe fallback if relationship join is unavailable
   if (error && (error.code === 'PGRST200' || error.message?.includes('relationship') || error.message?.includes('target_year'))) {
     let fallbackQuery = adminClient.from('scheduled_tasks').select('*').eq('status', 'pending');
-    if (userRole !== 'admin') {
+    if (isAdmin) {
+      // no filter
+    } else if (isCommonMentor) {
       fallbackQuery = fallbackQuery.or(`mentor_id.eq.${user.id},target_year.not.is.null,problem_slug_or_id.ilike.%::year:%`);
+    } else {
+      fallbackQuery = fallbackQuery.eq('mentor_id', user.id);
     }
     const fallbackRes = await fallbackQuery.order('scheduled_date', { ascending: true });
     scheduledTasks = fallbackRes.data;
@@ -342,20 +367,45 @@ export async function DELETE(request: NextRequest) {
     .single();
 
   const userRole = userProfile?.role || 'user';
-  const isCommonMentorOrAdmin = userRole === 'common_mentor' || userRole === 'admin';
+  const isAdmin = userRole === 'admin';
+  const isCommonMentor = userRole === 'common_mentor';
 
   const adminClient = createAdminSupabaseClient();
-  let query = adminClient
+
+  // First fetch the scheduled task to verify existence and check permissions
+  const { data: task, error: fetchErr } = await adminClient
+    .from('scheduled_tasks')
+    .select('id, mentor_id, target_year, problem_slug_or_id')
+    .eq('id', id)
+    .eq('status', 'pending')
+    .single();
+
+  if (fetchErr || !task) {
+    return NextResponse.json({ error: 'Scheduled question not found or already rolled out' }, { status: 404 });
+  }
+
+  const isOwner = task.mentor_id === user.id;
+  const isYearWide = !!task.target_year || (task.problem_slug_or_id && task.problem_slug_or_id.includes('::year:'));
+
+  // Strict Permissions:
+  // 1. Admin can cancel any scheduled question.
+  // 2. The mentor who scheduled the question (mentor_id === user.id) can cancel it.
+  // 3. A Common Mentor can cancel year-wide scheduled questions.
+  // Nobody else (students, standard mentors for tasks they didn't create) can delete!
+  const canDelete = isAdmin || isOwner || (isCommonMentor && isYearWide);
+
+  if (!canDelete) {
+    return NextResponse.json(
+      { error: 'Forbidden: You do not have permission to cancel or delete this scheduled question.' },
+      { status: 403 }
+    );
+  }
+
+  const { error } = await adminClient
     .from('scheduled_tasks')
     .delete()
     .eq('id', id)
     .eq('status', 'pending');
-
-  if (!isCommonMentorOrAdmin) {
-    query = query.eq('mentor_id', user.id);
-  }
-
-  const { error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
