@@ -149,12 +149,12 @@ export default function Dashboard() {
 
       // My mentees
       supabase.from('mentorships')
-        .select('mentee:users!mentorships_mentee_id_fkey(*)')
+        .select('mentee:users!mentorships_mentee_id_fkey(id, full_name, email, year, branch, roll_number, cf_handle, lc_handle)')
         .eq('mentor_id', user.id),
 
       // My mentors
       supabase.from('mentorships')
-        .select('mentor:users!mentorships_mentor_id_fkey(*)')
+        .select('mentor:users!mentorships_mentor_id_fkey(id, full_name, email, year, branch, roll_number, cf_handle, lc_handle)')
         .eq('mentee_id', user.id),
 
       // Tasks I assigned (mentor view)
@@ -163,9 +163,9 @@ export default function Dashboard() {
         .eq('assigned_by', user.id)
         .order('created_at', { ascending: false }),
 
-      // All eligible users for mentor request dropdown (only needed columns)
+      // All eligible users for mentor request dropdown (only minimal columns)
       supabase.from('users')
-        .select('id, full_name, email, role, year, branch, roll_number, cf_handle, lc_handle, approval_status, contact_number, created_at')
+        .select('id, full_name, email, role, year')
         .neq('id', user.id)
         .eq('approval_status', 'approved')
         .neq('role', 'admin'),

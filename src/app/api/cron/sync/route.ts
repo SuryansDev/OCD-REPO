@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { executeDailySync } from '@/lib/syncEngine';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 async function handleCronSync(request: NextRequest) {
   // Verify authorization via CRON_SECRET
   const authHeader = request.headers.get('authorization');

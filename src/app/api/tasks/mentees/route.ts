@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
+export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
+
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;
 

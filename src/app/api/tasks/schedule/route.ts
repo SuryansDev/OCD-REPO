@@ -4,6 +4,9 @@ import { parseTaskLink } from '@/lib/taskParser';
 import { getTodayIST, getDateOffsetIST } from '@/lib/dateUtils';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
+export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
+
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;
   return createServerClient(

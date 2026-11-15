@@ -5,6 +5,9 @@ import { getTodayIST, getDateOffsetIST } from '@/lib/dateUtils';
 import { rollOutScheduledTasks } from '@/lib/syncEngine';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
+export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
+
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;
 

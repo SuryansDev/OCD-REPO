@@ -5,6 +5,9 @@ import type { PlatformSyncStatus } from '@/lib/types';
 import { executeDailySync, rollOutScheduledTasks, triggerDailySyncIfFirstVisitToday, syncSingleUserStats } from '@/lib/syncEngine';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;
   return createServerClient(
@@ -156,23 +159,14 @@ async function fetchLatestCFContest() {
 
     const sameRound = finished.filter((c: any) => Math.abs(c.startTimeSeconds - latest.startTimeSeconds) <= 3600);
 
-    let totalContestParticipants: number | null = null;
-    try {
-      const rcRes = await fetch(`https://codeforces.com/api/contest.ratingChanges?contestId=${latest.id}`, { next: { revalidate: 300 } });
-      if (rcRes.ok) {
-        const rcData = await rcRes.json().catch(() => null);
-        if (rcData?.status === 'OK' && Array.isArray(rcData?.result)) {
-          totalContestParticipants = rcData.result.length;
-        }
-      }
-    } catch { }
-
+    // Optimized: Do not fetch 30MB contest.ratingChanges JSON across the wire;
+    // totalContestParticipants is not rendered in the UI.
     return {
       id: latest.id,
       name: latest.name,
       relatedNames: sameRound.map((c: any) => c.name),
       startTime: new Date(latest.startTimeSeconds * 1000).toISOString(),
-      totalContestParticipants,
+      totalContestParticipants: null,
     };
   } catch {
     return null;
@@ -181,16 +175,26 @@ async function fetchLatestCFContest() {
 
 async function getLatestContests() {
   const now = Date.now();
-  if (cachedLatestContests && (now - cachedLatestContestsAt < 5 * 60 * 1000)) {
+  // 15-minute in-memory cache for contest info (contests happen weekly)
+  if (cachedLatestContests && (now - cachedLatestContestsAt < 15 * 60 * 1000)) {
     return cachedLatestContests;
   }
-  const [lc, cf] = await Promise.all([
-    fetchLatestLCContest(),
-    fetchLatestCFContest(),
-  ]);
-  cachedLatestContests = { lc, cf };
-  cachedLatestContestsAt = now;
-  return cachedLatestContests;
+  try {
+    const [lc, cf] = await Promise.all([
+      fetchLatestLCContest(),
+      fetchLatestCFContest(),
+    ]);
+    if (lc || cf) {
+      cachedLatestContests = {
+        lc: lc || cachedLatestContests?.lc,
+        cf: cf || cachedLatestContests?.cf,
+      };
+      cachedLatestContestsAt = now;
+    }
+  } catch {
+    // If external fetch fails, gracefully return stale cache if available
+  }
+  return cachedLatestContests || { lc: null, cf: null };
 }
 
 // ─── GET /api/leaderboard/sync — fetch leaderboard data ─────

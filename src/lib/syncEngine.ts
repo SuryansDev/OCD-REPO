@@ -89,7 +89,8 @@ async function fetchCFSolved(handle: string, retries = 2): Promise<CFSolvedResul
       if (attempt > 0) {
         await new Promise((r) => setTimeout(r, 600 * attempt));
       }
-      const res = await fetch(`https://codeforces.com/api/user.status?handle=${encodeURIComponent(h)}&from=1&count=10000`, {
+      // Optimized count to 2500: prevents Codeforces from timing out or returning 504 on massive submission histories
+      const res = await fetch(`https://codeforces.com/api/user.status?handle=${encodeURIComponent(h)}&from=1&count=2500`, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
@@ -397,7 +398,12 @@ export async function rollOutScheduledTasks(supabase: any, targetDateIST?: strin
 }
 
 // ─── Compute User Stats for a single user ────────────────────
-export async function computeUserStats(supabase: any, u: any): Promise<{
+export async function computeUserStats(
+  supabase: any,
+  u: any,
+  preloadedCompletedDates?: string[],
+  preloadedMaxStreak?: number
+): Promise<{
   statsPayload: Record<string, any>;
   issue?: any;
 }> {
@@ -443,22 +449,24 @@ export async function computeUserStats(supabase: any, u: any): Promise<{
     cfStatus = 'missing';
     cfErrorMsg = u.cf_handle ? 'Placeholder or invalid Codeforces handle' : 'No Codeforces handle configured';
   } else {
-    const [cfInfoResult, cfLatest, cfSolvedResult] = await Promise.all([
-      fetchCFInfo(cfClean),
-      fetchCFRating(cfClean),
-      fetchCFSolved(cfClean),
-    ]);
-
+    // Check user info first to verify validity without flooding CF with multiple concurrent calls
+    const cfInfoResult = await fetchCFInfo(cfClean);
     cfStatus = cfInfoResult.status;
     cfErrorMsg = cfInfoResult.errorMsg || null;
-
-    if (cfSolvedResult.ok) {
-      statsPayload.cf_total_solved = cfSolvedResult.count;
-    }
 
     if (cfInfoResult.ok && cfInfoResult.info) {
       statsPayload.cf_rating = cfInfoResult.info.rating || 0;
       statsPayload.cf_max_rating = cfInfoResult.info.maxRating || 0;
+
+      // Only query contest rating and solved list if user handle is verified
+      const [cfLatest, cfSolvedResult] = await Promise.all([
+        fetchCFRating(cfClean),
+        fetchCFSolved(cfClean),
+      ]);
+
+      if (cfSolvedResult.ok) {
+        statsPayload.cf_total_solved = cfSolvedResult.count;
+      }
 
       if (cfLatest) {
         statsPayload.cf_latest_contest_name = cfLatest.contestName;
@@ -518,22 +526,30 @@ export async function computeUserStats(supabase: any, u: any): Promise<{
     };
   }
 
-  // ── Streak calculation ──
-  const { data: completedTasks } = await supabase
-    .from('tasks')
-    .select('completed_at')
-    .eq('assigned_to', u.id)
-    .eq('status', 'Completed')
-    .not('completed_at', 'is', null)
-    .order('completed_at', { ascending: false });
+  // ── Streak calculation (Zero-DB queries when batch preloaded) ──
+  let uniqueDates: string[] = [];
 
-  if (completedTasks && completedTasks.length > 0) {
-    const uniqueDates = Array.from(
-      new Set(completedTasks.map((t: any) => new Date(t.completed_at).toISOString().split('T')[0]))
-    )
-      .sort()
-      .reverse() as string[];
+  if (preloadedCompletedDates !== undefined) {
+    uniqueDates = Array.from(
+      new Set(preloadedCompletedDates.map((d: string) => new Date(d).toISOString().split('T')[0]))
+    ).sort().reverse() as string[];
+  } else {
+    const { data: completedTasks } = await supabase
+      .from('tasks')
+      .select('completed_at')
+      .eq('assigned_to', u.id)
+      .eq('status', 'Completed')
+      .not('completed_at', 'is', null)
+      .order('completed_at', { ascending: false });
 
+    if (completedTasks && completedTasks.length > 0) {
+      uniqueDates = Array.from(
+        new Set(completedTasks.map((t: any) => new Date(t.completed_at).toISOString().split('T')[0]))
+      ).sort().reverse() as string[];
+    }
+  }
+
+  if (uniqueDates.length > 0) {
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
@@ -556,13 +572,17 @@ export async function computeUserStats(supabase: any, u: any): Promise<{
     statsPayload.current_streak = streak;
     statsPayload.last_solve_date = uniqueDates[0];
 
-    const { data: existing } = await supabase
-      .from('user_stats')
-      .select('max_streak')
-      .eq('user_id', u.id)
-      .single();
+    let existingMax = preloadedMaxStreak;
+    if (existingMax === undefined) {
+      const { data: existing } = await supabase
+        .from('user_stats')
+        .select('max_streak')
+        .eq('user_id', u.id)
+        .single();
+      existingMax = existing?.max_streak || 0;
+    }
 
-    statsPayload.max_streak = Math.max(streak, existing?.max_streak || 0);
+    statsPayload.max_streak = Math.max(streak, existingMax || 0);
   }
 
   return { statsPayload, issue };
@@ -678,6 +698,30 @@ export async function syncLeaderboardRankings(supabase: any) {
     await supabase.from('user_stats').delete().in('user_id', invalidIds);
   }
 
+  // ── High-Performance Batch Pre-load ─────────────────────────
+  // 1. Preload all existing user_stats max_streaks in ONE query (replaces N DB queries)
+  const { data: existingStatsList } = await supabase
+    .from('user_stats')
+    .select('user_id, max_streak');
+  const existingMaxStreaks = new Map<string, number>();
+  (existingStatsList || []).forEach((s: any) => {
+    existingMaxStreaks.set(s.user_id, s.max_streak || 0);
+  });
+
+  // 2. Preload all completed tasks in ONE query (replaces N DB queries)
+  const { data: allCompletedTasks } = await supabase
+    .from('tasks')
+    .select('assigned_to, completed_at')
+    .eq('status', 'Completed')
+    .not('completed_at', 'is', null);
+
+  const completedTasksByUser = new Map<string, string[]>();
+  (allCompletedTasks || []).forEach((t: any) => {
+    const list = completedTasksByUser.get(t.assigned_to) || [];
+    list.push(t.completed_at);
+    completedTasksByUser.set(t.assigned_to, list);
+  });
+
   let synced = 0;
   const errors: string[] = [];
   const issues: Array<{
@@ -700,7 +744,14 @@ export async function syncLeaderboardRankings(supabase: any) {
     await Promise.all(
       batch.map(async (u: any) => {
         try {
-          const { statsPayload, issue } = await computeUserStats(supabase, u);
+          const userCompletedDates = completedTasksByUser.get(u.id) || [];
+          const userMaxStreak = existingMaxStreaks.get(u.id) || 0;
+          const { statsPayload, issue } = await computeUserStats(
+            supabase,
+            u,
+            userCompletedDates,
+            userMaxStreak
+          );
           if (issue) issues.push(issue);
 
           const { error: upsertError } = await upsertUserStatsSafely(supabase, statsPayload);
