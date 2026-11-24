@@ -4,10 +4,5 @@
       "path": "/api/cron/sync",
       "schedule": "30 22 * * *"
     }
-  ],
-  "functions": {
-    "src/app/api/**/*": {
-      "maxDuration": 60
-    }
-  }
+  ]
 }

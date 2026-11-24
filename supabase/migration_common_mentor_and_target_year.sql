@@ -24,5 +24,8 @@ CREATE POLICY "Mentors can create tasks" ON public.tasks FOR INSERT WITH CHECK (
 
 DROP POLICY IF EXISTS "Mentors can view assigned tasks" ON public.tasks;
 CREATE POLICY "Mentors can view assigned tasks" ON public.tasks FOR SELECT USING (
-  assigned_by = auth.uid() OR public.is_admin() OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'common_mentor')
+  assigned_by = auth.uid()
+  OR EXISTS (SELECT 1 FROM public.mentorships WHERE mentor_id = auth.uid() AND mentee_id = tasks.assigned_to)
+  OR public.is_admin()
+  OR EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'common_mentor')
 );

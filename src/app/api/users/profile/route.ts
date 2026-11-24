@@ -4,8 +4,8 @@ import { cleanCodeforcesHandle, cleanLeetCodeHandle } from '@/lib/handles';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { syncSingleUserStats } from '@/lib/syncEngine';
 
-export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;

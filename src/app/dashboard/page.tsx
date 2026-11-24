@@ -184,7 +184,7 @@ export default function Dashboard() {
         .order('created_at', { ascending: false }),
 
       // Scheduled tasks (fetch only, rollout happens in leaderboard API)
-      fetch('/api/tasks/schedule').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/tasks/schedule', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
 
     // ── Process critical results & unblock UI immediately ─────────────────────
@@ -259,32 +259,54 @@ export default function Dashboard() {
     setLoading(false);
 
     // ── Step 3: Fire secondary queries IN PARALLEL (non-blocking) ────────────
-    const [menteeTasksResult, lbResult] = await Promise.all([
-      // Mentee tasks (mentor view) — only if mentor has mentees
+    const menteeIds = mentees.map((m: any) => m.id);
+    const [menteeTasksResult, directMenteeTasksResult, lbResult] = await Promise.all([
+      // Mentee tasks from server endpoint (bypasses RLS with admin client)
       mentees.length > 0
-        ? fetch('/api/tasks/mentees').then(r => r.ok ? r.json() : null).catch(() => null)
+        ? fetch('/api/tasks/mentees', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
         : Promise.resolve(null),
 
+      // Direct Supabase query as fallback and merge
+      mentees.length > 0
+        ? supabase
+            .from('tasks')
+            .select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email, year), assigner:users!tasks_assigned_by_fkey(id, full_name, role)')
+            .in('assigned_to', menteeIds)
+        : Promise.resolve({ data: null }),
+
       // Leaderboard (also triggers rollout + first-visit daily sync server-side)
-      fetch('/api/leaderboard/sync').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/leaderboard/sync', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
 
-    let finalMenteeTasks: any[] = [];
-    if (menteeTasksResult?.tasks) {
-      finalMenteeTasks = menteeTasksResult.tasks;
-      setMenteeAllTasks(finalMenteeTasks);
-    } else if (mentees.length > 0) {
-      // Fallback: fetch directly from supabase
-      const menteeIds = mentees.map((m: any) => m.id);
-      const { data: allMenteeTasks } = await supabase
-        .from('tasks')
-        .select('*, assignee:users!tasks_assigned_to_fkey(id, full_name, email, year), assigner:users!tasks_assigned_by_fkey(id, full_name, role)')
-        .in('assigned_to', menteeIds);
-      if (allMenteeTasks) {
-        finalMenteeTasks = allMenteeTasks;
-        setMenteeAllTasks(finalMenteeTasks);
-      }
+    // Merge tasks from API and direct query by task id so no tasks are lost
+    const taskMap = new Map<string, any>();
+    if (menteeTasksResult?.tasks && Array.isArray(menteeTasksResult.tasks)) {
+      menteeTasksResult.tasks.forEach((t: any) => {
+        if (t && t.id) taskMap.set(String(t.id), t);
+      });
     }
+    if (directMenteeTasksResult?.data && Array.isArray(directMenteeTasksResult.data)) {
+      directMenteeTasksResult.data.forEach((t: any) => {
+        if (!t || !t.id) return;
+        const key = String(t.id);
+        const existing = taskMap.get(key);
+        if (!existing) {
+          taskMap.set(key, t);
+        } else {
+          taskMap.set(key, {
+            ...t,
+            ...existing,
+            status: existing.status === 'Completed' || t.status === 'Completed' ? 'Completed' : existing.status,
+            completed_at: existing.completed_at || t.completed_at,
+            assignee: existing.assignee || t.assignee,
+            assigner: existing.assigner || t.assigner,
+          });
+        }
+      });
+    }
+
+    const finalMenteeTasks = Array.from(taskMap.values());
+    setMenteeAllTasks(finalMenteeTasks);
 
     let finalLbStats: any[] = [];
     if (lbResult?.stats) {

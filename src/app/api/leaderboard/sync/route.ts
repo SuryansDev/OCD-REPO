@@ -5,8 +5,8 @@ import type { PlatformSyncStatus } from '@/lib/types';
 import { executeDailySync, rollOutScheduledTasks, triggerDailySyncIfFirstVisitToday, syncSingleUserStats } from '@/lib/syncEngine';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
-export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;

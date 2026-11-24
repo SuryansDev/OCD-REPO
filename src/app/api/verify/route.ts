@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // Helper to create supabase client from route handler
 function createRouteHandlerClient(request: NextRequest) {

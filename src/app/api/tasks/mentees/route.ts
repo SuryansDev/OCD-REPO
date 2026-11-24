@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
-export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function createRouteHandlerClient(request: NextRequest) {
   const cookieStore = request.cookies;
@@ -92,8 +92,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: fallbackError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ tasks: fallbackTasks || [], count: fallbackTasks?.length || 0 });
+    return NextResponse.json(
+      { tasks: fallbackTasks || [], count: fallbackTasks?.length || 0 },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   }
 
-  return NextResponse.json({ tasks: tasks || [], count: tasks?.length || 0 });
+  return NextResponse.json(
+    { tasks: tasks || [], count: tasks?.length || 0 },
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    }
+  );
 }
