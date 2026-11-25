@@ -533,6 +533,25 @@ export default function Dashboard() {
           setDashboardCache({ myTasks: updated });
           return updated;
         });
+
+        // Recalculate user's IST streak immediately on server & update leaderboard state
+        fetch('/api/stats/streak', { method: 'POST', cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((resData) => {
+            if (resData?.streak && profile?.id) {
+              setLeaderboardData((prev) => {
+                const updatedLb = prev.map((entry) =>
+                  entry.user_id === profile.id
+                    ? { ...entry, ...resData.streak }
+                    : entry
+                );
+                setDashboardCache({ leaderboardData: updatedLb });
+                return updatedLb;
+              });
+            }
+          })
+          .catch(() => null);
+
         if (newStatus === 'Completed') {
           setShowConfetti(true);
           setTimeout(() => setShowConfetti(false), 4000);
@@ -2016,11 +2035,17 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {leaderboardData[0]?.synced_at && (
-                  <div className="px-4 py-2 bg-surface-50/50 dark:bg-surface-850/50 text-[11px] text-surface-400 dark:text-surface-500 border-t border-surface-100 dark:border-surface-800 flex items-center justify-between">
-                    <span>Last synced: {new Date(leaderboardData[0].synced_at).toLocaleString()}</span>
-                  </div>
-                )}
+                {(() => {
+                  const latestSyncedTs = leaderboardData.reduce((maxTs, entry) => {
+                    const ts = entry?.synced_at ? new Date(entry.synced_at).getTime() : 0;
+                    return ts > maxTs ? ts : maxTs;
+                  }, 0);
+                  return latestSyncedTs > 0 ? (
+                    <div className="px-4 py-2 bg-surface-50/50 dark:bg-surface-850/50 text-[11px] text-surface-400 dark:text-surface-500 border-t border-surface-100 dark:border-surface-800 flex items-center justify-between">
+                      <span>Last synced: {new Date(latestSyncedTs).toLocaleString()}</span>
+                    </div>
+                  ) : null;
+                })()}
               </div>
             </div>
 

@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cleanCodeforcesHandle, cleanLeetCodeHandle } from '@/lib/handles';
 import type { PlatformSyncStatus } from '@/lib/types';
-import { executeDailySync, rollOutScheduledTasks, triggerDailySyncIfFirstVisitToday, syncSingleUserStats } from '@/lib/syncEngine';
+import {
+  executeDailySync,
+  fetchAllUserStats,
+  rollOutScheduledTasks,
+  syncAllUserStreaksIfStale,
+  syncSingleUserStats,
+  triggerDailySyncIfFirstVisitToday,
+} from '@/lib/syncEngine';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
@@ -93,6 +100,8 @@ export async function POST(request: NextRequest) {
   const result = await executeDailySync({
     supabaseClient,
     source,
+    maxExecutionMs: 180_000,
+    force: true,
   });
 
   return NextResponse.json(result);
@@ -215,14 +224,7 @@ export async function GET(request: NextRequest) {
     console.error('[Leaderboard API] Rollout check error:', err);
   }
 
-  // 2. Automatically trigger daily sync in the background if this is the first user opening the site today
-  try {
-    await triggerDailySyncIfFirstVisitToday(adminClient);
-  } catch (err) {
-    console.error('[Leaderboard API] First visit daily sync trigger error:', err);
-  }
-
-  // 3. Fetch all non-admin users from users table
+  // 2. Fetch all non-admin users and existing stats (paginated)
   const { data: allUsers, error: usersError } = await adminClient
     .from('users')
     .select('id, full_name, email, year, branch, roll_number, cf_handle, lc_handle, role, approval_status, created_at')
@@ -230,6 +232,28 @@ export async function GET(request: NextRequest) {
 
   if (usersError) {
     return NextResponse.json({ error: usersError.message }, { status: 500 });
+  }
+
+  let statsList = await fetchAllUserStats(adminClient);
+
+  // 3. Synchronously keep ALL IST streaks accurate (~100ms, pure DB, zero external API calls)
+  try {
+    const streaksUpdated = await syncAllUserStreaksIfStale(adminClient, {
+      preloadedUsers: allUsers || [],
+      preloadedStats: statsList,
+    });
+    if (streaksUpdated) {
+      statsList = await fetchAllUserStats(adminClient);
+    }
+  } catch (err) {
+    console.error('[Leaderboard API] Streak refresh error:', err);
+  }
+
+  // 4. For non-serverless self-hosted runtimes, trigger daily platform sync if not run today
+  try {
+    await triggerDailySyncIfFirstVisitToday(adminClient);
+  } catch (err) {
+    console.error('[Leaderboard API] First visit daily sync trigger error:', err);
   }
 
   // Filter: Put everyone in leaderboard except the admins (already filtered above)
@@ -240,11 +264,6 @@ export async function GET(request: NextRequest) {
     const hasYear = Boolean(u.year && String(u.year).trim() !== '');
     return hasRoll && hasYear;
   });
-
-  // Fetch all existing user_stats
-  const { data: statsList } = await adminClient
-    .from('user_stats')
-    .select('*');
 
   const statsMap = new Map<string, any>();
   (statsList || []).forEach((s: any) => {

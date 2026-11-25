@@ -1,9 +1,9 @@
-name: Daily Auto-Refresh Sync (4:00 AM IST)
+name: Daily Auto-Refresh Sync (4:15 AM IST Fallback & Catch-Up)
 
 on:
   schedule:
-    # 4:00 AM IST is 22:30 UTC
-    - cron: '30 22 * * *'
+    # 4:15 AM IST is 22:45 UTC (15 minutes after Vercel Cron at 22:30 UTC so they never collide)
+    - cron: '45 22 * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,12 +12,26 @@ jobs:
     steps:
       - name: Trigger Daily Leaderboard & Task Rollout Sync
         env:
-          APP_URL: ${{ secrets.DEPLOYED_APP_URL  || 'https://ocd-repo.vercel.app' }}
+          APP_URL: ${{ secrets.DEPLOYED_APP_URL || 'https://ocd-repo.vercel.app' }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          echo "Triggering auto-refresh sync at $APP_URL/api/cron/sync..."
-          curl -f -s -X POST "$APP_URL/api/cron/sync" \
-            -H "Authorization: Bearer $CRON_SECRET" \
-            -H "Content-Type: application/json" || \
-          curl -f -s "$APP_URL/api/cron/sync?key=$CRON_SECRET"
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Notice: CRON_SECRET repository secret is not configured. Skipping GitHub fallback (Vercel Cron handles daily sync)."
+            exit 0
+          fi
 
+          # Run bounded ~48s passes until partial is false (typically 1-2 passes to cover remaining profiles)
+          for pass in 1 2 3 4 5; do
+            echo "Running sync pass $pass at $APP_URL/api/cron/sync..."
+            RESPONSE=$(curl --fail --silent --show-error --max-time 75 -X POST "$APP_URL/api/cron/sync" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Content-Type: application/json")
+            echo "Pass $pass response: $RESPONSE"
+
+            if echo "$RESPONSE" | grep -q '"partial":false'; then
+              echo "All eligible profiles are synced for today."
+              break
+            fi
+
+            sleep 2
+          done

@@ -61,56 +61,65 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ tasks: [], count: 0 });
   }
 
-  // Fetch all tasks for these mentees with assignee & assigner details
-  const { data: tasks, error: tasksError } = await adminClient
-    .from('tasks')
-    .select(`
-      id,
-      assigned_by,
-      assigned_to,
-      platform,
-      problem_slug_or_id,
-      status,
-      assigned_date,
-      completed_at,
-      created_at,
-      assignee:users!tasks_assigned_to_fkey(id, full_name, email, year, branch, roll_number),
-      assigner:users!tasks_assigned_by_fkey(id, full_name, role)
-    `)
-    .in('assigned_to', menteeIds)
-    .order('created_at', { ascending: false });
+  // Paginate tasks for these mentees so cohorts exceeding 1,000 tasks are never truncated by Supabase
+  const PAGE_SIZE = 1000;
+  let allTasks: any[] = [];
+  let from = 0;
+  let joinSupported = true;
 
-  if (tasksError) {
-    // If foreign key naming alias issues occur, fallback to flat select
-    const { data: fallbackTasks, error: fallbackError } = await adminClient
-      .from('tasks')
-      .select('*')
-      .in('assigned_to', menteeIds)
-      .order('created_at', { ascending: false });
+  while (true) {
+    const query = joinSupported
+      ? adminClient
+          .from('tasks')
+          .select(`
+            id,
+            assigned_by,
+            assigned_to,
+            platform,
+            problem_slug_or_id,
+            status,
+            assigned_date,
+            completed_at,
+            created_at,
+            assignee:users!tasks_assigned_to_fkey(id, full_name, email, year, branch, roll_number),
+            assigner:users!tasks_assigned_by_fkey(id, full_name, role)
+          `)
+          .in('assigned_to', menteeIds)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1)
+      : adminClient
+          .from('tasks')
+          .select('*')
+          .in('assigned_to', menteeIds)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
 
-    if (fallbackError) {
-      return NextResponse.json({ error: fallbackError.message }, { status: 500 });
+    const { data: batch, error: batchError } = await query;
+
+    if (batchError) {
+      if (joinSupported) {
+        joinSupported = false;
+        allTasks = [];
+        from = 0;
+        continue;
+      }
+      return NextResponse.json({ error: batchError.message }, { status: 500 });
     }
 
-    return NextResponse.json(
-      { tasks: fallbackTasks || [], count: fallbackTasks?.length || 0 },
-      {
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      }
-    );
+    allTasks.push(...(batch || []));
+    if (!batch || batch.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
 
+  allTasks.sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
   return NextResponse.json(
-    { tasks: tasks || [], count: tasks?.length || 0 },
+    { tasks: allTasks, count: allTasks.length },
     {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
+        Pragma: 'no-cache',
+        Expires: '0',
       },
     }
   );

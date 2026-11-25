@@ -5,6 +5,12 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
+
 async function handleCronSync(request: NextRequest) {
   // Verify authorization via CRON_SECRET
   const authHeader = request.headers.get('authorization');
@@ -14,27 +20,50 @@ async function handleCronSync(request: NextRequest) {
 
   const expectedSecret = process.env.CRON_SECRET;
   const isAuthorized = Boolean(
-    expectedSecret && (
-      authHeader === `Bearer ${expectedSecret}` ||
-      cronKeyHeader === expectedSecret ||
-      cronParam === expectedSecret
-    )
+    expectedSecret &&
+      (authHeader === `Bearer ${expectedSecret}` ||
+        cronKeyHeader === expectedSecret ||
+        cronParam === expectedSecret)
   );
 
   if (!isAuthorized) {
     return NextResponse.json(
       { error: 'Unauthorized: Invalid or missing CRON_SECRET' },
-      { status: 401 }
+      { status: 401, headers: NO_STORE_HEADERS }
     );
   }
 
-  const supabase = createAdminSupabaseClient();
-  const result = await executeDailySync({
-    supabaseClient: supabase,
-    source: 'cron_endpoint',
-  });
+  try {
+    const force = searchParams.get('force') === 'true';
+    const budgetParam = parseInt(searchParams.get('budget') || '', 10);
+    // Stay cleanly below Vercel cron/serverless timeout ceilings (~48s default) while guaranteeing
+    // 100% completion of task rollouts, IST streaks (<1s), and stale-first LC/CF platform updates.
+    const maxExecutionMs =
+      Number.isFinite(budgetParam) && budgetParam >= 10_000 && budgetParam <= 240_000
+        ? budgetParam
+        : 48_000;
 
-  return NextResponse.json(result);
+    const supabase = createAdminSupabaseClient();
+    const result = await executeDailySync({
+      supabaseClient: supabase,
+      source: 'cron_endpoint',
+      maxExecutionMs,
+      skipFreshHours: force ? 0 : 6,
+      force,
+    });
+
+    return NextResponse.json(result, { status: 200, headers: NO_STORE_HEADERS });
+  } catch (err: any) {
+    console.error('[CronSync] Unhandled error during cron sync:', err);
+    return NextResponse.json(
+      {
+        success: false,
+        error: err?.message || 'Internal cron sync error',
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500, headers: NO_STORE_HEADERS }
+    );
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -44,4 +73,3 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return handleCronSync(request);
 }
-

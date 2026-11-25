@@ -2,17 +2,43 @@
  * Utility functions for handling IST (Indian Standard Time, UTC+5:30) dates and midnight scheduling.
  */
 
+const istDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * Converts a Date or ISO timestamp string to YYYY-MM-DD in Asia/Kolkata (IST).
+ */
+export function toISTDateString(input: string | Date): string {
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) {
+    return typeof input === 'string' && /^\d{4}-\d{2}-\d{2}/.test(input) ? input.slice(0, 10) : '';
+  }
+  return istDateFormatter.format(date);
+}
+
+/**
+ * Shifts a YYYY-MM-DD calendar date string by `deltaDays` using pure UTC date math
+ * (immune to host timezone offsets).
+ */
+export function stepDateString(dateStr: string, deltaDays: number): string {
+  const parts = dateStr.split('-').map((n) => parseInt(n, 10));
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return dateStr;
+  const target = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + deltaDays));
+  const y = target.getUTCFullYear();
+  const m = String(target.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(target.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /**
  * Returns today's date formatted as YYYY-MM-DD in Asia/Kolkata (IST).
  */
 export function getTodayIST(): string {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return formatter.format(new Date());
+  return istDateFormatter.format(new Date());
 }
 
 /**

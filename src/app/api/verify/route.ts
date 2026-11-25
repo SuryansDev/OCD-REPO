@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { recalculateUserStreak } from '@/lib/syncEngine';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -197,8 +199,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Immediately recalculate user's IST streak so leaderboard updates right away
+    let streak = null;
+    try {
+      const adminClient = createAdminSupabaseClient();
+      streak = await recalculateUserStreak(adminClient, user.id);
+    } catch (streakErr) {
+      console.error('[Verify API] Streak recalculation error:', streakErr);
+    }
+
     return NextResponse.json({
       verifiedCount: completedTaskIds.length,
+      streak,
       message: `Successfully verified ${completedTaskIds.length} tasks!`
     });
   }
