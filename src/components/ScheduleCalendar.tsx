@@ -60,6 +60,16 @@ export default function ScheduleCalendar({
   const [displayedYear, setDisplayedYear] = useState<number>(initY || new Date().getFullYear());
   const [displayedMonth, setDisplayedMonth] = useState<number>((initM ? initM - 1 : new Date().getMonth()));
 
+  // Collapse expanded view on Escape key
+  React.useEffect(() => {
+    if (!isExpanded) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsExpanded(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isExpanded]);
+
   // Active / pending scheduled tasks
   const pendingScheduledTasks = useMemo(() => {
     return scheduledTasks.filter((t) => t.status === 'pending');
@@ -111,7 +121,7 @@ export default function ScheduleCalendar({
         bgLight: 'bg-amber-50 dark:bg-amber-950/70',
         text: 'text-amber-800 dark:text-amber-300',
         border: 'border-amber-200 dark:border-amber-800',
-        badge: 'bg-amber-100 text-amber-900 dark:text-amber-200 border-amber-200 dark:border-amber-800',
+        badge: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border-amber-200 dark:border-amber-800',
         dot: 'bg-amber-500',
       };
     }
@@ -471,8 +481,14 @@ export default function ScheduleCalendar({
   };
 
   return (
-    <div className={`transition-all duration-200 ${isExpanded ? 'fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto' : ''}`}>
-      <div className={`w-full bg-white dark:bg-surface-900 rounded-2xl border border-brand-200 dark:border-brand-900/70 shadow-xs flex flex-col ${isExpanded ? 'max-w-4xl max-h-[92vh] overflow-y-auto p-6 border-2 shadow-2xl' : 'p-4 sm:p-5'}`}>
+    <div
+      onClick={() => isExpanded && setIsExpanded(false)}
+      className={`transition-all duration-200 ${isExpanded ? 'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto' : ''}`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`w-full bg-white dark:bg-surface-900 rounded-2xl border border-brand-200 dark:border-brand-900/70 shadow-sm flex flex-col ${isExpanded ? 'max-w-4xl max-h-[92vh] overflow-y-auto p-6 border-2 shadow-2xl animate-scale-in' : 'p-4 sm:p-5'}`}
+      >
         
         {/* ─── CALENDAR TOP BAR: TITLE, TABS & CONTROLS ───────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-200 dark:border-surface-800">
@@ -552,7 +568,7 @@ export default function ScheduleCalendar({
               onClick={() => setSelectedYearFilter('all')}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                 selectedYearFilter === 'all'
-                  ? 'bg-brand-600 text-white shadow-2xs'
+                  ? 'bg-brand-600 text-white shadow-sm'
                   : 'bg-surface-100 dark:bg-surface-800 text-surface-700 dark:text-surface-300 hover:bg-surface-200 dark:hover:bg-surface-700'
               }`}
             >
@@ -563,8 +579,8 @@ export default function ScheduleCalendar({
               onClick={() => setSelectedYearFilter('1')}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 selectedYearFilter === '1'
-                  ? 'bg-blue-600 text-white shadow-2xs'
-                  : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-100'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/60'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
@@ -575,8 +591,8 @@ export default function ScheduleCalendar({
               onClick={() => setSelectedYearFilter('2')}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 selectedYearFilter === '2'
-                  ? 'bg-purple-600 text-white shadow-2xs'
-                  : 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-100'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-100 dark:hover:bg-purple-900/60'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
@@ -587,8 +603,8 @@ export default function ScheduleCalendar({
               onClick={() => setSelectedYearFilter('3')}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 selectedYearFilter === '3'
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -599,8 +615,8 @@ export default function ScheduleCalendar({
               onClick={() => setSelectedYearFilter('4')}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 selectedYearFilter === '4'
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-900/60'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
@@ -612,8 +628,8 @@ export default function ScheduleCalendar({
                 onClick={() => setSelectedYearFilter('cohort')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                   selectedYearFilter === 'cohort'
-                    ? 'bg-rose-600 text-white shadow-2xs'
-                    : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 hover:bg-rose-100'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 hover:bg-rose-100 dark:hover:bg-rose-900/60'
                 }`}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
@@ -701,7 +717,7 @@ export default function ScheduleCalendar({
                 } else if (isPast) {
                   cellStyle = 'bg-surface-100/40 dark:bg-surface-900/40 border-surface-200/30 dark:border-surface-800/30 text-surface-400/50 dark:text-surface-600/50 opacity-35 cursor-not-allowed';
                 } else if (day.isBeyond30Days) {
-                  cellStyle = 'bg-surface-50/40 dark:bg-surface-900/20 border-dashed border-surface-200/40 text-surface-300 dark:text-surface-600 opacity-40 cursor-not-allowed';
+                  cellStyle = 'bg-surface-50/40 dark:bg-surface-900/20 border-dashed border-surface-200/40 dark:border-surface-800/40 text-surface-300 dark:text-surface-600 opacity-40 cursor-not-allowed';
                 }
 
                 if (isSelected && isSelectable) {
@@ -944,7 +960,7 @@ export default function ScheduleCalendar({
                       onClick={onQuickScheduleFocus}
                       className="mt-1 btn-secondary text-xs py-1 px-3 inline-flex items-center gap-1"
                     >
-                      <PlusCircle className="w-3.5 h-3.5 text-brand-600" /> Schedule for this date
+                      <PlusCircle className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" /> Schedule for this date
                     </button>
                   )}
                 </div>
@@ -1049,8 +1065,8 @@ export default function ScheduleCalendar({
                       key={task.id}
                       className={`flex items-center justify-between text-xs p-3 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/40 shadow-xs'
-                          : 'border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-850 hover:border-brand-300'
+                          ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/40 shadow-sm'
+                          : 'border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-850 hover:border-brand-300 dark:hover:border-brand-700'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0 pr-2">
@@ -1061,7 +1077,7 @@ export default function ScheduleCalendar({
                             onSelectDate(task.scheduled_date);
                             setViewMode('calendar');
                           }}
-                          className="font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/80 border border-brand-200 dark:border-brand-800 px-2 py-1 rounded-lg text-[11px] whitespace-nowrap hover:bg-brand-100"
+                          className="font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/80 border border-brand-200 dark:border-brand-800 px-2 py-1 rounded-lg text-[11px] whitespace-nowrap hover:bg-brand-100 dark:hover:bg-brand-900/70 transition-colors"
                           title="Click to view on calendar"
                         >
                           {formatScheduledDateLabel(task.scheduled_date, todayIST)}
@@ -1081,7 +1097,7 @@ export default function ScheduleCalendar({
                           href={getTaskLink(task)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-surface-400 hover:text-brand-600 transition-colors shrink-0"
+                          className="text-surface-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors shrink-0"
                           title="Open problem link"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />

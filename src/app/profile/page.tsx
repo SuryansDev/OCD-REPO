@@ -12,10 +12,12 @@ import {
 } from '@/lib/handles';
 import { 
   Loader2, Save, User, Mail, Phone, Hash, BookOpen, GitBranch, 
-  ExternalLink, CheckCircle, AlertCircle, ArrowLeft, Palette, Sparkles
+  ExternalLink, CheckCircle, AlertCircle, ArrowLeft, Palette, Sparkles,
+  Sun, Moon, Monitor
 } from 'lucide-react';
 import { useRatingColorPreference } from '@/lib/ratingColors';
 import { updateCachedProfile } from '@/lib/dashboardCache';
+import { useTheme, type Theme } from '@/components/ThemeProvider';
 
 function ProfileContent() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -27,6 +29,7 @@ function ProfileContent() {
 
   // Preference for Codeforces rating colors (defaults to false)
   const [showRatingColors, setShowRatingColors] = useRatingColorPreference();
+  const { theme, setTheme } = useTheme();
 
   // Editable fields
   const [lcHandle, setLcHandle] = useState('');
@@ -426,6 +429,51 @@ function ProfileContent() {
             </p>
 
             <div className="space-y-4">
+              {/* Theme Mode Switcher */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-surface-50 dark:bg-surface-850 border border-surface-200 dark:border-surface-800">
+                <div className="space-y-1">
+                  <span className="text-sm font-bold text-surface-900 dark:text-surface-100 flex items-center gap-1.5">
+                    <Sun className="w-4 h-4 text-amber-500 dark:hidden" />
+                    <Moon className="w-4 h-4 text-brand-400 hidden dark:inline" />
+                    Color Theme
+                  </span>
+                  <p className="text-xs text-surface-500 dark:text-surface-400 leading-relaxed max-w-lg">
+                    Choose between Light, Dark, or match your device&apos;s System appearance automatically.
+                  </p>
+                </div>
+
+                <div className="inline-flex items-center p-1 rounded-xl bg-surface-200/70 dark:bg-surface-900 border border-surface-200 dark:border-surface-700 shrink-0 self-end sm:self-center">
+                  {([
+                    { key: 'light', label: 'Light', icon: Sun },
+                    { key: 'dark', label: 'Dark', icon: Moon },
+                    { key: 'system', label: 'System', icon: Monitor },
+                  ] as const).map((option) => {
+                    const Icon = option.icon;
+                    const active = theme === option.key;
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const x = e.clientX > 0 ? e.clientX : rect.left + rect.width / 2;
+                          const y = e.clientY > 0 ? e.clientY : rect.top + rect.height / 2;
+                          setTheme(option.key as Theme, { x, y });
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                          active
+                            ? 'bg-white dark:bg-surface-800 text-brand-600 dark:text-brand-300 shadow-sm border border-surface-200/80 dark:border-surface-700'
+                            : 'text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-100'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Leaderboard Rating Colors Switch */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-surface-50 dark:bg-surface-850 border border-surface-200 dark:border-surface-800">
                 <div className="space-y-1">
@@ -462,7 +510,7 @@ function ProfileContent() {
                     }}
                     role="switch"
                     aria-checked={showRatingColors}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 ${
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-surface-900 ${
                       showRatingColors ? 'bg-brand-600' : 'bg-surface-300 dark:bg-surface-700'
                     }`}
                   >
@@ -510,9 +558,9 @@ function ProfileContent() {
 export default function ProfilePage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-surface-50">
-        <div className="flex items-center gap-3 text-surface-300">
-          <Loader2 className="w-5 h-5 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
+        <div className="flex items-center gap-3 text-surface-500 dark:text-surface-400">
+          <Loader2 className="w-5 h-5 animate-spin text-brand-500" />
           <span className="text-sm font-medium">Loading Profile…</span>
         </div>
       </div>

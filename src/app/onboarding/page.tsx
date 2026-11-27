@@ -129,8 +129,8 @@ export default function OnboardingPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-50">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+      <div className="min-h-screen flex items-center justify-center bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-600 dark:text-brand-400" />
       </div>
     );
   }
@@ -152,35 +152,35 @@ export default function OnboardingPage() {
             <Code2 className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold gradient-text">Complete Your Profile</h1>
-          <p className="text-surface-500 text-sm mt-1">
+          <p className="text-surface-500 dark:text-surface-400 text-sm mt-1">
             One quick step to set up your coding profile and request mentor assignment
           </p>
         </div>
 
         <div className="glass-card rounded-3xl p-8">
           {/* Verified Google Badge */}
-          <div className="mb-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-between">
+          <div className="mb-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
                     College Google ID Verified
                   </span>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <div className="text-sm font-semibold text-surface-900 mt-0.5">
+                <div className="text-sm font-semibold text-surface-900 dark:text-surface-100 mt-0.5">
                   {user?.user_metadata?.full_name || user?.user_metadata?.name || 'Student'}
-                  <span className="text-surface-500 font-normal ml-2">({user?.email})</span>
+                  <span className="text-surface-500 dark:text-surface-400 font-normal ml-2">({user?.email})</span>
                 </div>
               </div>
             </div>
             <button
               onClick={handleSignOut}
               title="Sign out and switch account"
-              className="text-surface-400 hover:text-surface-700 p-2 rounded-lg hover:bg-emerald-100/50 transition-colors"
+              className="text-surface-500 dark:text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 p-2 rounded-lg hover:bg-emerald-100/60 dark:hover:bg-emerald-900/50 transition-colors"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -189,7 +189,7 @@ export default function OnboardingPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">
                   Roll Number *
                 </label>
                 <input
@@ -206,7 +206,7 @@ export default function OnboardingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">
                   Academic Year *
                 </label>
                 <select
@@ -226,7 +226,7 @@ export default function OnboardingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">
                   Branch / Department *
                 </label>
                 <select
@@ -248,7 +248,7 @@ export default function OnboardingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">
                   Contact Number (WhatsApp) *
                 </label>
                 <input
@@ -265,7 +265,7 @@ export default function OnboardingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">
                   Codeforces Handle *
                 </label>
                 <input
@@ -280,7 +280,7 @@ export default function OnboardingPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">
                   LeetCode Handle *
                 </label>
                 <input
@@ -295,15 +295,15 @@ export default function OnboardingPage() {
               </div>
             </div>
 
-            <div className="rounded-xl bg-amber-50/70 border border-amber-200/60 p-3 text-xs text-amber-900 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="rounded-xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/60 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <p className="leading-relaxed">
                 <strong>Important:</strong> Please ensure your <strong>LeetCode profile &amp; submissions</strong> are set to <strong>Public</strong> in your LeetCode Privacy settings so your stats and tasks can sync automatically.
               </p>
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800/70 text-red-700 dark:text-red-300 text-sm">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                 {error}
               </div>

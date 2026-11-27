@@ -15,7 +15,7 @@ import {
   Loader2, PlusCircle, CheckCircle, CheckCircle2, CircleDashed, Code2,
   Link as LinkIcon, UserPlus, Clock, AlertCircle, X, ExternalLink,
   Trophy, Flame, BarChart3, Award, ChevronLeft, ChevronRight, Check,
-  Video, CheckSquare, Square, Calendar, Trash2, Users
+  Video, CheckSquare, Square, Calendar, Trash2, Users, Search, Sparkles
 } from 'lucide-react';
 import {
   cleanCodeforcesHandle,
@@ -72,6 +72,8 @@ export default function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [taskPage, setTaskPage] = useState(1);
+  const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | 'Pending' | 'Completed'>('all');
+  const [taskSearch, setTaskSearch] = useState('');
 
   // My mentor role state
   const [myMentees, setMyMentees] = useState<UserProfile[]>([]);
@@ -111,6 +113,7 @@ export default function Dashboard() {
   const [leaderboardTab, setLeaderboardTab] = useState<'streak' | 'lc_rating' | 'cf_rating' | 'total_solved' | 'lc_contest' | 'cf_contest'>('streak');
   const [leaderboardYearFilter, setLeaderboardYearFilter] = useState<'all' | '1' | '2' | '3' | '4' | 'Alumni'>('all');
   const [leaderboardPage, setLeaderboardPage] = useState(1);
+  const [leaderboardSearch, setLeaderboardSearch] = useState('');
   const [selectedLCContest, setSelectedLCContest] = useState<string>('latest');
   const [selectedCFContest, setSelectedCFContest] = useState<string>('latest');
 
@@ -634,8 +637,20 @@ export default function Dashboard() {
     setAssigning(false);
   };
 
+  // Close modals on Escape key press
+  useEffect(() => {
+    if (!selectedTaskGroup && !selectedMentee && !showPromotion) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedTaskGroup(null);
+        setSelectedMentee(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedTaskGroup, selectedMentee, showPromotion]);
+
   const handleDeleteScheduledTask = async (id: number) => {
-    if (!confirm('Are you sure you want to cancel this scheduled question?')) return;
     setDeletingScheduledId(id);
 
     try {
@@ -853,10 +868,24 @@ export default function Dashboard() {
     });
   }, [myTasks]);
 
+  const filteredSortedTasks = useMemo(() => {
+    return sortedTasks.filter((t) => {
+      if (taskStatusFilter !== 'all' && t.status !== taskStatusFilter) return false;
+      if (taskSearch.trim()) {
+        const q = taskSearch.toLowerCase().trim();
+        const title = formatProblemTitle(t.problem_slug_or_id, t.platform).toLowerCase();
+        const slug = (t.problem_slug_or_id || '').toLowerCase();
+        const platform = (t.platform || '').toLowerCase();
+        return title.includes(q) || slug.includes(q) || platform.includes(q);
+      }
+      return true;
+    });
+  }, [sortedTasks, taskStatusFilter, taskSearch]);
+
   const TASKS_PER_PAGE = 10;
-  const totalTaskPages = Math.max(1, Math.ceil(sortedTasks.length / TASKS_PER_PAGE));
+  const totalTaskPages = Math.max(1, Math.ceil(filteredSortedTasks.length / TASKS_PER_PAGE));
   const safeTaskPage = Math.min(Math.max(1, taskPage), totalTaskPages);
-  const paginatedTasks = sortedTasks.slice(
+  const paginatedTasks = filteredSortedTasks.slice(
     (safeTaskPage - 1) * TASKS_PER_PAGE,
     safeTaskPage * TASKS_PER_PAGE
   );
@@ -864,6 +893,15 @@ export default function Dashboard() {
   const completedCount = useMemo(() => {
     return myTasks.filter((t) => t.status === 'Completed').length;
   }, [myTasks]);
+
+  const pendingCount = useMemo(() => {
+    return Math.max(0, myTasks.length - completedCount);
+  }, [myTasks.length, completedCount]);
+
+  const myUserStats = useMemo(() => {
+    if (!profile?.id) return null;
+    return leaderboardData.find((entry) => entry.user_id === profile.id) || null;
+  }, [leaderboardData, profile?.id]);
 
   const handleTabChange = (tab: typeof leaderboardTab) => {
     setLeaderboardTab(tab);
@@ -1015,10 +1053,24 @@ export default function Dashboard() {
     targetCFNames,
   ]);
 
+  const rankedLeaderboard = useMemo(() => {
+    return sortedLeaderboard.map((entry, idx) => ({ entry, rank: idx + 1 }));
+  }, [sortedLeaderboard]);
+
+  const filteredLeaderboard = useMemo(() => {
+    if (!leaderboardSearch.trim()) return rankedLeaderboard;
+    const q = leaderboardSearch.toLowerCase().trim();
+    return rankedLeaderboard.filter(({ entry }) => {
+      const name = (entry.user?.full_name || '').toLowerCase();
+      const roll = (entry.user?.roll_number || '').toLowerCase();
+      return name.includes(q) || roll.includes(q);
+    });
+  }, [rankedLeaderboard, leaderboardSearch]);
+
   const LEADERBOARD_PER_PAGE = 5;
-  const totalLeaderboardPages = Math.max(1, Math.ceil(sortedLeaderboard.length / LEADERBOARD_PER_PAGE));
+  const totalLeaderboardPages = Math.max(1, Math.ceil(filteredLeaderboard.length / LEADERBOARD_PER_PAGE));
   const safeLeaderboardPage = Math.min(Math.max(1, leaderboardPage), totalLeaderboardPages);
-  const paginatedLeaderboard = sortedLeaderboard.slice(
+  const paginatedLeaderboard = filteredLeaderboard.slice(
     (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE,
     safeLeaderboardPage * LEADERBOARD_PER_PAGE
   );
@@ -1053,8 +1105,48 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
-        <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+      <div className="min-h-screen bg-surface-50 dark:bg-surface-950 transition-colors duration-150">
+        <div className="h-16 border-b border-surface-200/70 dark:border-surface-800/80 glass-card">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 skeleton rounded-xl" />
+              <div className="w-24 h-5 skeleton" />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 skeleton rounded-xl" />
+              <div className="w-9 h-9 skeleton rounded-xl" />
+            </div>
+          </div>
+        </div>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="card p-4 space-y-2">
+                <div className="w-20 h-3 skeleton" />
+                <div className="w-16 h-7 skeleton" />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="card p-6 space-y-4">
+              <div className="w-40 h-6 skeleton" />
+              <div className="space-y-2.5">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-12 skeleton" />
+                ))}
+              </div>
+            </div>
+            <div className="card p-6 space-y-4">
+              <div className="w-40 h-6 skeleton" />
+              <div className="h-16 skeleton" />
+              <div className="space-y-2.5">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="h-11 skeleton" />
+                ))}
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -1107,8 +1199,8 @@ export default function Dashboard() {
 
       {/* --- MODAL: PROMOTION --- */}
       {showPromotion && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 animate-fade-in">
-          <div className="bg-white dark:bg-surface-900 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-800 w-full max-w-sm overflow-hidden text-center p-8">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-surface-900 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-800 w-full max-w-sm overflow-hidden text-center p-8 animate-scale-in">
             <div className="w-20 h-20 bg-gradient-to-tr from-brand-400 to-brand-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-brand-500/30">
               <span className="text-4xl">🚀</span>
             </div>
@@ -1128,8 +1220,14 @@ export default function Dashboard() {
 
       {/* --- MODAL: TASK GROUP DETAILS --- */}
       {selectedTaskGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in">
-          <div className="bg-white dark:bg-surface-900 rounded-2xl shadow-xl border border-surface-200 dark:border-surface-800 w-full max-w-lg overflow-hidden">
+        <div
+          onClick={() => setSelectedTaskGroup(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-surface-900 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-800 w-full max-w-lg overflow-hidden animate-scale-in"
+          >
             <div className="p-5 border-b border-surface-100 dark:border-surface-800 flex justify-between items-center bg-surface-50 dark:bg-surface-850">
               <div>
                 <a
@@ -1150,34 +1248,34 @@ export default function Dashboard() {
 
             <div className="p-6">
               <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-surface-50 rounded-xl p-4 border border-surface-100 text-center">
-                  <div className="text-2xl font-black text-surface-900">{selectedTaskGroup.tasks.length}</div>
-                  <div className="text-[10px] font-bold text-surface-500 uppercase mt-1">Total Assigned</div>
+                <div className="bg-surface-50 dark:bg-surface-850 rounded-xl p-4 border border-surface-100 dark:border-surface-800 text-center">
+                  <div className="text-2xl font-black text-surface-900 dark:text-surface-100 tabular-nums">{selectedTaskGroup.tasks.length}</div>
+                  <div className="text-[10px] font-bold text-surface-500 dark:text-surface-400 uppercase mt-1">Total Assigned</div>
                 </div>
-                <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 text-center">
-                  <div className="text-2xl font-black text-emerald-700">{selectedTaskGroup.tasks.filter((t: any) => t.status === 'Completed').length}</div>
-                  <div className="text-[10px] font-bold text-emerald-600 uppercase mt-1">Completed</div>
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800/60 text-center">
+                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{selectedTaskGroup.tasks.filter((t: any) => t.status === 'Completed').length}</div>
+                  <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase mt-1">Completed</div>
                 </div>
-                <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 text-center">
-                  <div className="text-2xl font-black text-amber-700">{selectedTaskGroup.tasks.filter((t: any) => t.status !== 'Completed').length}</div>
-                  <div className="text-[10px] font-bold text-amber-600 uppercase mt-1">Pending</div>
+                <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-4 border border-amber-100 dark:border-amber-800/60 text-center">
+                  <div className="text-2xl font-black text-amber-700 dark:text-amber-300 tabular-nums">{selectedTaskGroup.tasks.filter((t: any) => t.status !== 'Completed').length}</div>
+                  <div className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase mt-1">Pending</div>
                 </div>
               </div>
 
-              <h4 className="text-sm font-bold text-surface-900 mb-3 border-b border-surface-100 pb-2">Mentees Still Pending</h4>
+              <h4 className="text-sm font-bold text-surface-900 dark:text-surface-100 mb-3 border-b border-surface-100 dark:border-surface-800 pb-2">Mentees Still Pending</h4>
               <ul className="space-y-2 max-h-60 overflow-y-auto pr-2">
                 {Array.from(new Map(
                   selectedTaskGroup.tasks
                     .filter((t: any) => t.status !== 'Completed')
                     .map((t: any) => [t.assigned_to || t.assignee?.id || t.id, t])
                 ).values()).map((t: any) => (
-                  <li key={t.id} className="flex items-center justify-between p-3 rounded-lg bg-surface-50 text-sm">
-                    <span className="font-medium text-surface-900">{t.assignee?.full_name}</span>
-                    <span className="text-xs font-semibold text-amber-600 bg-amber-100 px-2 py-1 rounded-md">Pending</span>
+                  <li key={t.id} className="flex items-center justify-between p-3 rounded-lg bg-surface-50 dark:bg-surface-850 border border-surface-200/70 dark:border-surface-800 text-sm">
+                    <span className="font-medium text-surface-900 dark:text-surface-100">{t.assignee?.full_name}</span>
+                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 border border-amber-200/70 dark:border-amber-800/60 px-2 py-0.5 rounded-md">Pending</span>
                   </li>
                 ))}
                 {selectedTaskGroup.tasks.filter((t: any) => t.status !== 'Completed').length === 0 && (
-                  <p className="text-sm text-surface-500 italic text-center py-4">Everyone has completed this task!</p>
+                  <p className="text-sm text-surface-500 dark:text-surface-400 italic text-center py-4">Everyone has completed this task!</p>
                 )}
               </ul>
             </div>
@@ -1187,8 +1285,14 @@ export default function Dashboard() {
 
       {/* --- MODAL: MENTEE PROGRESS --- */}
       {selectedMentee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in backdrop-blur-xs">
-          <div className="bg-white dark:bg-surface-900 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-800 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+        <div
+          onClick={() => setSelectedMentee(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in backdrop-blur-sm"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-surface-900 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-800 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-scale-in"
+          >
             {/* Modal Header */}
             <div className="p-5 border-b border-surface-100 dark:border-surface-800 flex justify-between items-start bg-surface-50 dark:bg-surface-850 shrink-0">
               <div className="min-w-0 pr-3">
@@ -1357,21 +1461,130 @@ export default function Dashboard() {
       )}
 
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+        {/* --- QUICK OVERVIEW STRIP --- */}
+        <section className="animate-fade-in space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-surface-900 dark:text-surface-100 tracking-tight flex items-center gap-2.5 flex-wrap">
+                <span>Workspace Overview</span>
+                {profile?.year && (
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950/70 text-brand-700 dark:text-brand-300 border border-brand-200/80 dark:border-brand-800/70">
+                    Year {profile.year}
+                  </span>
+                )}
+              </h1>
+              <p className="text-xs sm:text-sm text-surface-500 dark:text-surface-400 mt-1">
+                {pendingCount === 0 && myTasks.length > 0
+                  ? 'All assigned tasks completed — submissions and streak are up to date.'
+                  : pendingCount > 0
+                  ? `${pendingCount} pending ${pendingCount === 1 ? 'assignment' : 'assignments'} awaiting completion.`
+                  : 'Assignments, competitive programming rankings, and mentorship activity.'}
+              </p>
+            </div>
+
+            {pendingCount > 0 && (
+              <button
+                onClick={handleSyncProgress}
+                disabled={syncing}
+                className="btn-secondary py-2 px-4 text-xs self-start sm:self-auto"
+              >
+                {syncing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-600 dark:text-brand-400" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
+                )}
+                {syncing ? 'Verifying submissions…' : 'Quick Sync'}
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="card p-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400">Pending</p>
+                <p className={`text-2xl font-black mt-0.5 tabular-nums ${pendingCount === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                  {pendingCount}
+                </p>
+                <p className="text-[11px] text-surface-500 dark:text-surface-400 mt-0.5">
+                  {pendingCount === 0 ? 'All caught up' : 'To solve'}
+                </p>
+              </div>
+              <div className={`p-2.5 rounded-xl ${pendingCount === 0 ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400' : 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400'}`}>
+                {pendingCount === 0 ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+              </div>
+            </div>
+
+            <div className="card p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400">Completion</p>
+                  <p className="text-2xl font-black text-surface-900 dark:text-surface-100 mt-0.5 tabular-nums">
+                    {myTasks.length > 0 ? `${Math.round((completedCount / myTasks.length) * 100)}%` : '—'}
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-brand-600 dark:text-brand-400 tabular-nums">
+                  {completedCount}/{myTasks.length}
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden mt-2.5">
+                <div
+                  className="h-full bg-gradient-to-r from-brand-500 to-emerald-500 rounded-full transition-all duration-500"
+                  style={{ width: `${myTasks.length > 0 ? Math.round((completedCount / myTasks.length) * 100) : 0}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="card p-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400">Daily Streak</p>
+                <p className="text-2xl font-black text-orange-600 dark:text-orange-400 mt-0.5 tabular-nums">
+                  {myUserStats ? (myUserStats.current_streak || 0) : '—'}
+                </p>
+                <p className="text-[11px] text-surface-500 dark:text-surface-400 mt-0.5 tabular-nums">
+                  Best: {myUserStats ? (myUserStats.max_streak || 0) : '—'} days
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400">
+                <Flame className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="card p-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-surface-500 dark:text-surface-400">
+                  {myMentees.length > 0 ? 'My Cohort' : 'Mentors'}
+                </p>
+                <p className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-0.5 tabular-nums">
+                  {myMentees.length > 0 ? myMentees.length : myMentors.length}
+                </p>
+                <p className="text-[11px] text-surface-500 dark:text-surface-400 mt-0.5">
+                  {myMentees.length > 0
+                    ? `${myMentees.length === 1 ? 'Mentee' : 'Mentees'} active`
+                    : `${myMentors.length === 1 ? 'Mentor' : 'Mentors'} linked`}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
+                <Users className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* --- TOP SECTION: MY ASSIGNMENTS (LEFT) & LEADERBOARD (RIGHT) --- */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
 
           {/* LEFT: MY ASSIGNMENTS */}
-          <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.1s' }}>
-            <div className="flex items-center justify-between mb-5">
+          <div className="card p-6 overflow-hidden flex flex-col animate-fade-in" style={{ animationDelay: '0.1s' }}>
+            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-brand-100 dark:bg-brand-950/80 rounded-xl text-brand-600 dark:text-brand-300 shadow-sm shadow-brand-500/10">
                   <Code2 className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-surface-900 dark:text-surface-100">My Assignments</h2>
-                  <p className="text-xs text-surface-400 mt-0.5">
+                  <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5 tabular-nums">
                     {completedCount} of {myTasks.length} solved
                   </p>
                 </div>
@@ -1393,6 +1606,62 @@ export default function Dashboard() {
               )}
             </div>
 
+            {/* Filter & Search Bar for My Assignments */}
+            {myTasks.length > 0 && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4">
+                <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-surface-100/90 dark:bg-surface-850 border border-surface-200/80 dark:border-surface-800 self-start">
+                  {([
+                    { key: 'all', label: `All (${myTasks.length})` },
+                    { key: 'Pending', label: `Pending (${pendingCount})` },
+                    { key: 'Completed', label: `Solved (${completedCount})` },
+                  ] as const).map((pill) => (
+                    <button
+                      key={pill.key}
+                      type="button"
+                      onClick={() => {
+                        setTaskStatusFilter(pill.key);
+                        setTaskPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                        taskStatusFilter === pill.key
+                          ? 'bg-white dark:bg-surface-800 text-brand-600 dark:text-brand-300 shadow-sm border border-surface-200/80 dark:border-surface-700'
+                          : 'text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-200'
+                      }`}
+                    >
+                      {pill.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative flex-1 sm:max-w-[200px]">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400" />
+                  <input
+                    type="text"
+                    value={taskSearch}
+                    onChange={(e) => {
+                      setTaskSearch(e.target.value);
+                      setTaskPage(1);
+                    }}
+                    placeholder="Filter problems…"
+                    className="input-field pl-8 pr-7 py-1.5 text-xs"
+                  />
+                  {taskSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTaskSearch('');
+                        setTaskPage(1);
+                      }}
+                      aria-label="Clear problem filter"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-700 dark:hover:text-surface-200"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* LeetCode-style Problem Table */}
             <div className="border border-surface-200 dark:border-surface-800 rounded-xl overflow-hidden bg-white dark:bg-surface-900">
               <div className="overflow-x-auto">
@@ -1407,38 +1676,44 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-200/80 dark:divide-surface-800">
-                    {myTasks.length === 0 ? (
+                    {filteredSortedTasks.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-12 text-center text-surface-400">
+                        <td colSpan={5} className="px-4 py-12 text-center text-surface-500 dark:text-surface-400">
                           <Code2 className="w-8 h-8 text-surface-300 dark:text-surface-600 mx-auto mb-2" />
-                          <p className="font-semibold text-surface-700 dark:text-surface-200 text-sm">No assignments assigned yet</p>
-                          <p className="text-xs text-surface-400 mt-1">When your mentor assigns questions or videos, they will appear here.</p>
+                          <p className="font-semibold text-surface-700 dark:text-surface-200 text-sm">
+                            {myTasks.length === 0 ? 'No assignments assigned yet' : 'No matching assignments'}
+                          </p>
+                          <p className="text-xs text-surface-500 dark:text-surface-400 mt-1">
+                            {myTasks.length === 0
+                              ? 'When your mentor assigns questions or videos, they will appear here.'
+                              : 'Try clearing your search or status filter.'}
+                          </p>
                         </td>
                       </tr>
                     ) : (
                       paginatedTasks.map((task) => (
-                        <tr key={task.id} className="hover:bg-surface-50/80 transition-colors group">
+                        <tr key={task.id} className="hover:bg-surface-50/90 dark:hover:bg-surface-850/75 transition-colors group">
                           {/* Solved / Unsolved Icon / Checkbox */}
                           <td className="py-3 px-3 text-center">
                             {task.platform === 'YouTube' || task.platform === 'CSES' ? (
                               <button
                                 onClick={() => handleToggleSelfCheck(task)}
                                 disabled={togglingTaskId === task.id}
-                                className="p-1 rounded-md hover:bg-surface-100 transition-colors inline-flex items-center justify-center focus:outline-none"
+                                className="p-1 rounded-md hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors inline-flex items-center justify-center focus:outline-none"
                                 title={task.status === 'Completed' ? 'Click to uncheck' : 'Click to self-check'}
                               >
                                 {togglingTaskId === task.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin text-brand-600" />
+                                  <Loader2 className="w-4 h-4 animate-spin text-brand-600 dark:text-brand-400" />
                                 ) : task.status === 'Completed' ? (
-                                  <CheckSquare className="w-4 h-4 text-emerald-600" />
+                                  <CheckSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                                 ) : (
-                                  <Square className="w-4 h-4 text-surface-400 hover:text-emerald-500" />
+                                  <Square className="w-4 h-4 text-surface-400 hover:text-emerald-500 dark:hover:text-emerald-400" />
                                 )}
                               </button>
                             ) : task.status === 'Completed' ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 mx-auto" />
                             ) : (
-                              <CircleDashed className="w-4 h-4 text-surface-300 mx-auto group-hover:text-amber-500 transition-colors" />
+                              <CircleDashed className="w-4 h-4 text-surface-300 dark:text-surface-600 mx-auto group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors" />
                             )}
                           </td>
 
@@ -1452,33 +1727,33 @@ export default function Dashboard() {
                               title={task.problem_slug_or_id}
                             >
                               <span className="truncate">{formatProblemTitle(task.problem_slug_or_id, task.platform)}</span>
-                              <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-brand-500 shrink-0 transition-opacity" />
+                              <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-brand-500 dark:text-brand-400 shrink-0 transition-opacity" />
                             </a>
                           </td>
 
                           {/* Platform Pill */}
                           <td className="py-3 px-3 text-center">
                             {task.platform === 'LeetCode' ? (
-                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/70">
                                 LC
                               </span>
                             ) : task.platform === 'YouTube' ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200/80">
-                                <Video className="w-3 h-3 text-red-600" /> YT
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200/80 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/70">
+                                <Video className="w-3 h-3 text-red-600 dark:text-red-400" /> YT
                               </span>
                             ) : task.platform === 'CSES' ? (
-                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/80">
+                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/80 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800/70">
                                 CSES
                               </span>
                             ) : (
-                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80">
+                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/70">
                                 CF
                               </span>
                             )}
                           </td>
 
                           {/* Assigned Date */}
-                          <td className="py-3 px-3 text-right text-xs text-surface-400 whitespace-nowrap">
+                          <td className="py-3 px-3 text-right text-xs text-surface-500 dark:text-surface-400 whitespace-nowrap tabular-nums">
                             {new Date(task.assigned_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                           </td>
 
@@ -1490,26 +1765,26 @@ export default function Dashboard() {
                                 disabled={togglingTaskId === task.id}
                                 className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border transition-all ${
                                   task.status === 'Completed'
-                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
-                                    : 'text-brand-700 bg-brand-50 border-brand-200 hover:bg-brand-100 shadow-sm'
+                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-950/60 dark:border-emerald-800/70 dark:hover:bg-emerald-900/60'
+                                    : 'text-brand-700 bg-brand-50 border-brand-200 hover:bg-brand-100 dark:text-brand-300 dark:bg-brand-950/60 dark:border-brand-800/70 dark:hover:bg-brand-900/60 shadow-sm'
                                 }`}
                                 title={task.status === 'Completed' ? 'Click to mark as pending' : 'Click to self-check as completed'}
                               >
                                 {togglingTaskId === task.id ? (
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                 ) : task.status === 'Completed' ? (
-                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                                 ) : (
-                                  <CheckSquare className="w-3 h-3 text-brand-600" />
+                                  <CheckSquare className="w-3 h-3 text-brand-600 dark:text-brand-400" />
                                 )}
                                 {task.status === 'Completed' ? 'Completed' : 'Self Check'}
                               </button>
                             ) : task.status === 'Completed' ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 dark:text-emerald-300 dark:bg-emerald-950/60 dark:border-emerald-800/70">
                                 <CheckCircle className="w-3 h-3" /> Solved
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 dark:text-amber-300 dark:bg-amber-950/60 dark:border-amber-800/70">
                                 <Clock className="w-3 h-3" /> Pending
                               </span>
                             )}
@@ -1523,8 +1798,8 @@ export default function Dashboard() {
 
               {/* Slider / Pagination Footer */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 dark:bg-surface-850/70 border-t border-surface-200 dark:border-surface-800">
-                <span className="text-xs text-surface-500 dark:text-surface-400 font-medium order-2 sm:order-1">
-                  Showing {sortedTasks.length === 0 ? 0 : (safeTaskPage - 1) * TASKS_PER_PAGE + 1}–{Math.min(safeTaskPage * TASKS_PER_PAGE, sortedTasks.length)} of {sortedTasks.length} questions
+                <span className="text-xs text-surface-500 dark:text-surface-400 font-medium order-2 sm:order-1 tabular-nums">
+                  Showing {filteredSortedTasks.length === 0 ? 0 : (safeTaskPage - 1) * TASKS_PER_PAGE + 1}–{Math.min(safeTaskPage * TASKS_PER_PAGE, filteredSortedTasks.length)} of {filteredSortedTasks.length} questions
                 </span>
 
                 <div className="flex items-center gap-2 order-1 sm:order-2">
@@ -1629,6 +1904,34 @@ export default function Dashboard() {
                     {tab.label}
                   </button>
                 ))}
+              </div>
+
+              {/* Quick Participant Search */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400" />
+                <input
+                  type="text"
+                  value={leaderboardSearch}
+                  onChange={(e) => {
+                    setLeaderboardSearch(e.target.value);
+                    setLeaderboardPage(1);
+                  }}
+                  placeholder="Search participant by name or roll number…"
+                  className="input-field pl-9 pr-8 py-1.5 text-xs"
+                />
+                {leaderboardSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLeaderboardSearch('');
+                      setLeaderboardPage(1);
+                    }}
+                    aria-label="Clear participant search"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-700 dark:hover:text-surface-200"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* PINNED USER STANDING CARD (Always at top so you never have to find your rank) */}
@@ -1852,23 +2155,27 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-200/80 dark:divide-surface-800">
-                      {sortedLeaderboard.length === 0 ? (
+                      {filteredLeaderboard.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-12 text-center text-surface-400">
+                          <td colSpan={6} className="px-4 py-12 text-center text-surface-500 dark:text-surface-400">
                             <Trophy className="w-8 h-8 text-surface-300 dark:text-surface-600 mx-auto mb-2" />
-                            <p className="font-semibold text-surface-700 dark:text-surface-200 text-sm">No leaderboard data found</p>
-                            <p className="text-xs text-surface-400 mt-1">
-                              {leaderboardYearFilter !== 'all'
-                                ? `No participants found from Year ${leaderboardYearFilter} for this category.`
-                                : leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest'
-                                  ? 'No participants in this contest yet.'
-                                  : 'Rankings will appear once synced.'}
+                            <p className="font-semibold text-surface-700 dark:text-surface-200 text-sm">
+                              {leaderboardSearch.trim() ? 'No matching participants' : 'No leaderboard data found'}
+                            </p>
+                            <p className="text-xs text-surface-500 dark:text-surface-400 mt-1">
+                              {leaderboardSearch.trim()
+                                ? `No participants matched "${leaderboardSearch.trim()}".`
+                                : leaderboardYearFilter !== 'all'
+                                  ? `No participants found from Year ${leaderboardYearFilter} for this category.`
+                                  : leaderboardTab === 'lc_contest' || leaderboardTab === 'cf_contest'
+                                    ? 'No participants in this contest yet.'
+                                    : 'Rankings will appear once synced.'}
                             </p>
                           </td>
                         </tr>
                       ) : (
-                        paginatedLeaderboard.map((entry, index) => {
-                          const actualRank = (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + index;
+                        paginatedLeaderboard.map(({ entry, rank }) => {
+                          const actualRank = rank - 1;
                           const isMe = entry.user_id === profile?.id;
                           const tier = getLeaderboardTier(leaderboardTab, entry);
                           const cfTier = getCFRatingTier(entry.cf_rating);
@@ -1995,8 +2302,8 @@ export default function Dashboard() {
 
                 {/* Slider / Pagination Footer for Leaderboard */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-surface-50/70 dark:bg-surface-850/70 border-t border-surface-200 dark:border-surface-800">
-                  <span className="text-xs text-surface-500 dark:text-surface-400 font-medium order-2 sm:order-1">
-                    Showing {sortedLeaderboard.length === 0 ? 0 : (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + 1}–{Math.min(safeLeaderboardPage * LEADERBOARD_PER_PAGE, sortedLeaderboard.length)} of {sortedLeaderboard.length} participants
+                  <span className="text-xs text-surface-500 dark:text-surface-400 font-medium order-2 sm:order-1 tabular-nums">
+                    Showing {filteredLeaderboard.length === 0 ? 0 : (safeLeaderboardPage - 1) * LEADERBOARD_PER_PAGE + 1}–{Math.min(safeLeaderboardPage * LEADERBOARD_PER_PAGE, filteredLeaderboard.length)} of {filteredLeaderboard.length} participants
                   </span>
 
                   <div className="flex items-center gap-2 order-1 sm:order-2">
@@ -2050,15 +2357,15 @@ export default function Dashboard() {
             </div>
 
             {/* MY COHORT CARD (Placed below Leaderboard) */}
-            <div className="card p-6 overflow-hidden flex flex-col animate-fade-in shadow-sm hover:shadow-md transition-all" style={{ animationDelay: '0.25s' }}>
+            <div className="card p-6 overflow-hidden flex flex-col animate-fade-in" style={{ animationDelay: '0.25s' }}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-purple-100 rounded-xl text-purple-600 shadow-sm shadow-purple-500/10">
+                  <div className="p-2.5 bg-purple-100 dark:bg-purple-950/80 rounded-xl text-purple-600 dark:text-purple-300 shadow-sm shadow-purple-500/10">
                     <UserPlus className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-surface-900">My Cohort</h3>
-                    <p className="text-xs text-surface-400 mt-0.5">
+                    <h3 className="text-xl font-bold text-surface-900 dark:text-surface-100">My Cohort</h3>
+                    <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5 tabular-nums">
                       {myMentees.length} {myMentees.length === 1 ? 'mentee' : 'mentees'} enrolled
                     </p>
                   </div>
@@ -2066,7 +2373,7 @@ export default function Dashboard() {
                 {incomingRequests.length > 0 && (
                   <a
                     href="#incoming-requests"
-                    className="inline-flex items-center gap-1 text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 px-2.5 py-1 rounded-full border border-amber-300 transition-colors animate-pulse"
+                    className="inline-flex items-center gap-1 text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 dark:bg-amber-950/80 dark:hover:bg-amber-900/80 dark:text-amber-200 dark:border-amber-700 px-2.5 py-1 rounded-full transition-colors animate-pulse"
                     title="Click to view pending requests"
                   >
                     {incomingRequests.length} pending request{incomingRequests.length > 1 ? 's' : ''}
@@ -2075,16 +2382,16 @@ export default function Dashboard() {
               </div>
 
               {incomingRequests.length > 0 && (
-                <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-900 flex items-center justify-between shadow-xs">
+                <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/70 rounded-xl p-3 mb-3 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between shadow-sm">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                    <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                     <span>
                       You have <strong>{incomingRequests.length}</strong> prospective mentee request{incomingRequests.length > 1 ? 's' : ''}.
                     </span>
                   </div>
                   <a
                     href="#incoming-requests"
-                    className="font-bold text-amber-700 hover:text-amber-950 underline shrink-0 ml-2"
+                    className="font-bold text-amber-700 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-100 underline shrink-0 ml-2"
                   >
                     Review &rarr;
                   </a>
@@ -2092,10 +2399,10 @@ export default function Dashboard() {
               )}
 
               {myMentees.length === 0 ? (
-                <div className="p-6 text-center text-surface-400 border border-dashed border-surface-200 rounded-xl">
-                  <UserPlus className="w-7 h-7 text-surface-300 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-surface-600">No mentees in your cohort yet</p>
-                  <p className="text-xs text-surface-400 mt-1">When students request you and you accept their request, they will appear here.</p>
+                <div className="p-6 text-center text-surface-500 dark:text-surface-400 border border-dashed border-surface-200 dark:border-surface-800 rounded-xl">
+                  <UserPlus className="w-7 h-7 text-surface-300 dark:text-surface-600 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-surface-600 dark:text-surface-300">No mentees in your cohort yet</p>
+                  <p className="text-xs text-surface-500 dark:text-surface-400 mt-1">When students request you and you accept their request, they will appear here.</p>
                 </div>
               ) : (
                 <ul className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
@@ -2379,7 +2686,7 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-brand-100 dark:bg-brand-950 text-brand-800 dark:text-brand-300 border border-brand-200 dark:border-brand-800 shrink-0">
-                  <Clock className="w-3 h-3 text-brand-600" /> Auto-sync: Daily on First Visit (IST)
+                  <Clock className="w-3 h-3 text-brand-600 dark:text-brand-400" /> Auto-sync: Daily on First Visit (IST)
                 </span>
               </div>
 

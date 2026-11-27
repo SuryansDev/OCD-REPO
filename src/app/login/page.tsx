@@ -90,8 +90,8 @@ function LoginForm() {
   return (
     <div className="glass-card rounded-3xl p-8">
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-surface-900">Welcome back</h2>
-        <p className="text-surface-400 text-sm mt-1">
+        <h2 className="text-xl font-bold text-surface-900 dark:text-surface-100">Welcome back</h2>
+        <p className="text-surface-500 dark:text-surface-400 text-sm mt-1">
           Sign in to your account to continue
         </p>
       </div>
@@ -102,10 +102,10 @@ function LoginForm() {
           type="button"
           onClick={handleGoogleLogin}
           disabled={loadingGoogle || loading}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-2xl bg-white dark:bg-surface-850 border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 text-surface-800 dark:text-surface-100 font-semibold text-sm shadow-sm hover:shadow transition-all group"
+          className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-2xl bg-white dark:bg-surface-850 border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 text-surface-800 dark:text-surface-100 font-semibold text-sm shadow-sm hover:shadow active:scale-[0.99] transition-all group"
         >
           {loadingGoogle ? (
-            <Loader2 className="w-5 h-5 animate-spin text-brand-600" />
+            <Loader2 className="w-5 h-5 animate-spin text-brand-600 dark:text-brand-400" />
           ) : (
             <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
               <path
@@ -128,7 +128,7 @@ function LoginForm() {
           )}
           <span>Continue with College Google ID</span>
         </button>
-        <div className="text-center text-[11px] text-surface-400 mt-2 font-medium">
+        <div className="text-center text-[11px] text-surface-500 dark:text-surface-400 mt-2 font-medium">
           Only official <span className="font-semibold text-brand-600 dark:text-brand-400">@nitkkr.ac.in</span> accounts permitted
         </div>
       </div>
@@ -139,7 +139,7 @@ function LoginForm() {
           <div className="w-full border-t border-surface-200 dark:border-surface-700" />
         </div>
         <div className="relative flex justify-center text-xs">
-          <span className="px-3 bg-white/80 dark:bg-surface-900/90 text-surface-400 font-medium">
+          <span className="px-3 py-0.5 rounded-full bg-white/95 dark:bg-surface-900/95 text-surface-500 dark:text-surface-400 font-medium">
             Or sign in with email &amp; password
           </span>
         </div>
@@ -184,6 +184,7 @@ function LoginForm() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-800 dark:hover:text-surface-200 transition-colors"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -193,7 +194,7 @@ function LoginForm() {
 
         {/* Error message */}
         {error && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm animate-scale-in">
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800/70 text-red-700 dark:text-red-300 text-sm animate-scale-in">
             <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
             <span>{error}</span>
           </div>
@@ -214,9 +215,9 @@ function LoginForm() {
         </button>
       </form>
 
-      <div className="mt-6 text-center text-sm text-surface-500">
+      <div className="mt-6 text-center text-sm text-surface-500 dark:text-surface-400">
         Don&apos;t have an account?{' '}
-        <Link href="/signup" className="font-semibold text-brand-600 hover:text-brand-700">
+        <Link href="/signup" className="font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors">
           Sign up
         </Link>
       </div>
@@ -245,16 +246,16 @@ export default function LoginPage() {
             <Code2 className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold gradient-text">OCD</h1>
-          <p className="text-surface-400 text-sm mt-1 font-medium tracking-wide">
+          <p className="text-surface-500 dark:text-surface-400 text-sm mt-1 font-medium tracking-wide">
             Open Code Developers — NIT Kurukshetra
           </p>
         </div>
 
-        <Suspense fallback={<div className="glass-card rounded-3xl p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-600" /></div>}>
+        <Suspense fallback={<div className="glass-card rounded-3xl p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-600 dark:text-brand-400" /></div>}>
           <LoginForm />
         </Suspense>
 
-        <p className="text-center text-xs text-surface-400 mt-6">
+        <p className="text-center text-xs text-surface-500 dark:text-surface-400 mt-6">
           Automated verification for Codeforces &amp; LeetCode
         </p>
       </div>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { UserPlus, Code2, Loader2 } from 'lucide-react';
+import { UserPlus, Code2, Loader2, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import DarkModeToggle from '@/components/DarkModeToggle';
 
@@ -20,6 +20,7 @@ export default function SignupPage() {
     lc_handle: '',
   });
 
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +107,7 @@ export default function SignupPage() {
             <Code2 className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold gradient-text">Create Account</h1>
-          <p className="text-surface-400 text-sm mt-1">
+          <p className="text-surface-500 dark:text-surface-400 text-sm mt-1">
             Join Open Code Developers at NIT Kurukshetra
           </p>
         </div>
@@ -118,10 +119,10 @@ export default function SignupPage() {
               type="button"
               onClick={handleGoogleSignup}
               disabled={loadingGoogle || loading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-2xl bg-white dark:bg-surface-850 border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 text-surface-800 dark:text-surface-100 font-semibold text-sm shadow-sm hover:shadow transition-all group"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-2xl bg-white dark:bg-surface-850 border border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 text-surface-800 dark:text-surface-100 font-semibold text-sm shadow-sm hover:shadow active:scale-[0.99] transition-all group"
             >
               {loadingGoogle ? (
-                <Loader2 className="w-5 h-5 animate-spin text-brand-600" />
+                <Loader2 className="w-5 h-5 animate-spin text-brand-600 dark:text-brand-400" />
               ) : (
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                   <path
@@ -144,8 +145,8 @@ export default function SignupPage() {
               )}
               <span>Sign up with College Google ID</span>
             </button>
-            <div className="text-center text-[11px] text-surface-400 mt-2 font-medium">
-              ⚡ Instant setup with <span className="font-semibold text-brand-600">@nitkkr.ac.in</span> — no passwords or email links required
+            <div className="text-center text-[11px] text-surface-500 dark:text-surface-400 mt-2 font-medium">
+              ⚡ Instant setup with <span className="font-semibold text-brand-600 dark:text-brand-400">@nitkkr.ac.in</span> — no passwords or email links required
             </div>
           </div>
 
@@ -155,7 +156,7 @@ export default function SignupPage() {
               <div className="w-full border-t border-surface-200 dark:border-surface-700" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-white/80 dark:bg-surface-900/90 text-surface-400 font-medium">
+              <span className="px-3 py-0.5 rounded-full bg-white/95 dark:bg-surface-900/95 text-surface-500 dark:text-surface-400 font-medium">
                 Or fill details manually with password
               </span>
             </div>
@@ -164,11 +165,11 @@ export default function SignupPage() {
           <form onSubmit={handleSignup} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Full Name *</label>
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">Full Name *</label>
                 <input name="full_name" type="text" value={formData.full_name} onChange={handleChange} required minLength={2} className="input-field" placeholder="John Doe" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">College Email ID *</label>
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">College Email ID *</label>
                 <input 
                   name="email" 
                   type="email" 
@@ -182,15 +183,25 @@ export default function SignupPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Password *</label>
-                <input name="password" type="password" value={formData.password} onChange={handleChange} required minLength={6} className="input-field" placeholder="Min 6 characters" />
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">Password *</label>
+                <div className="relative">
+                  <input name="password" type={showPassword ? 'text' : 'password'} value={formData.password} onChange={handleChange} required minLength={6} className="input-field pr-10" placeholder="Min 6 characters" />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-800 dark:hover:text-surface-200 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Roll Number *</label>
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">Roll Number *</label>
                 <input name="roll_number" type="text" value={formData.roll_number} onChange={handleChange} required pattern="^[A-Za-z0-9]+$" title="Alphanumeric only, no spaces or special characters" className="input-field" placeholder="e.g. 21BCE100" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Year *</label>
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">Year *</label>
                 <select name="year" value={formData.year} onChange={handleChange} required className="input-field">
                   <option value="" disabled>Select Year</option>
                   <option value="1">1st Year</option>
@@ -201,7 +212,7 @@ export default function SignupPage() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Branch *</label>
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">Branch *</label>
                 <select name="branch" value={formData.branch} onChange={handleChange} required className="input-field">
                   <option value="" disabled>Select Branch</option>
                   <option value="CSE">Computer Science (CSE)</option>
@@ -214,21 +225,21 @@ export default function SignupPage() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Contact Number *</label>
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">Contact Number *</label>
                 <input name="contact_number" type="tel" value={formData.contact_number} onChange={handleChange} required pattern="^\d{10}$" title="Must be exactly 10 digits" className="input-field" placeholder="e.g. 9876543210" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">Codeforces Handle *</label>
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">Codeforces Handle *</label>
                 <input name="cf_handle" type="text" value={formData.cf_handle} onChange={handleChange} required pattern="^[A-Za-z0-9_.-]+$" title="Username only" className="input-field" placeholder="e.g. tourist" />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-semibold text-surface-800 uppercase tracking-wider">LeetCode Handle *</label>
+                <label className="text-xs font-semibold text-surface-800 dark:text-surface-200 uppercase tracking-wider">LeetCode Handle *</label>
                 <input name="lc_handle" type="text" value={formData.lc_handle} onChange={handleChange} required pattern="^[A-Za-z0-9_.-]+$" title="Username only" className="input-field" placeholder="e.g. neetcode" />
               </div>
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800/70 text-red-700 dark:text-red-300 text-sm">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                 {error}
               </div>
@@ -240,9 +251,9 @@ export default function SignupPage() {
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-surface-500">
+          <div className="mt-6 text-center text-sm text-surface-500 dark:text-surface-400">
             Already have an account?{' '}
-            <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700">
+            <Link href="/login" className="font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 transition-colors">
               Log in
             </Link>
           </div>
