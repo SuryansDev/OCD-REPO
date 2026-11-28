@@ -43,6 +43,7 @@ export async function updateSession(request: NextRequest) {
 
   const isProtected = request.nextUrl.pathname.startsWith('/dashboard') ||
                       request.nextUrl.pathname.startsWith('/admin') ||
+                      request.nextUrl.pathname.startsWith('/contests') ||
                       request.nextUrl.pathname.startsWith('/profile');
 
   if (isProtected && !user) {

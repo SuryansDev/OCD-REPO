@@ -1,8 +1,37 @@
 export type UserRole = 'admin' | 'common_mentor' | 'user';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type Platform = 'Codeforces' | 'LeetCode' | 'YouTube' | 'CSES';
+export type ContestPlatform = 'Codeforces' | 'AtCoder' | 'CodeChef' | 'LeetCode';
+export type ContestPhase = 'live' | 'upcoming';
 export type TaskStatus = 'Pending' | 'Completed';
 export type ScheduledTaskStatus = 'pending' | 'rolled_out' | 'cancelled';
+
+export interface UpcomingContest {
+  id: string;
+  platform: ContestPlatform;
+  name: string;
+  url: string;
+  startTime: string;
+  endTime: string;
+  durationSeconds: number;
+  phase: ContestPhase;
+  ratedInfo?: string | null;
+}
+
+export interface PlatformFetchStatus {
+  platform: ContestPlatform;
+  ok: boolean;
+  count: number;
+  stale?: boolean;
+  error?: string;
+}
+
+export interface ContestsApiResponse {
+  contests: UpcomingContest[];
+  platformStatuses: PlatformFetchStatus[];
+  fetchedAt: string;
+  cached: boolean;
+}
 
 export interface ScheduledTask {
   id: number;

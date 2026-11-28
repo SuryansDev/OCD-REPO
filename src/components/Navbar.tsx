@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Code2, LogOut, LayoutDashboard, Shield, User } from 'lucide-react';
+import { Code2, LogOut, LayoutDashboard, Shield, User, CalendarDays } from 'lucide-react';
 import type { UserRole } from '@/lib/types';
 import DarkModeToggle from '@/components/DarkModeToggle';
 import { clearDashboardCache } from '@/lib/dashboardCache';
@@ -37,18 +37,43 @@ export default function Navbar({ fullName, role }: NavbarProps) {
       ? [{ href: '/admin', label: 'Admin', icon: Shield }]
       : []),
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/contests', label: 'Contest Calendar', icon: CalendarDays },
     { href: '/profile', label: 'Profile', icon: User },
   ];
+
+  const renderNavLinks = (compact = false) =>
+    navItems.map((item) => {
+      const Icon = item.icon;
+      const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          className={`inline-flex items-center gap-1.5 ${
+            compact ? 'px-2.5' : 'px-3'
+          } py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
+            isActive
+              ? 'bg-white dark:bg-surface-800 text-brand-600 dark:text-brand-300 shadow-sm border border-surface-200/80 dark:border-surface-700'
+              : compact
+              ? 'text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-100 bg-surface-100/70 dark:bg-surface-850/80'
+              : 'text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-100 hover:bg-white/60 dark:hover:bg-surface-800/60'
+          }`}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {item.label}
+        </Link>
+      );
+    });
 
   return (
     <nav className="sticky top-0 z-50 glass-card border-b border-surface-200/70 dark:border-surface-800/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
           {/* Left: Logo + Nav Links */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 min-w-0">
             <Link
               href={role === 'admin' ? '/admin' : '/dashboard'}
-              className="flex items-center gap-3 cursor-pointer group"
+              className="flex items-center gap-3 cursor-pointer group shrink-0"
             >
               <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-md shadow-brand-500/20 group-hover:scale-105 group-hover:shadow-brand-500/35 transition-all duration-200">
                 <Code2 className="w-5 h-5 text-white" />
@@ -63,24 +88,7 @@ export default function Navbar({ fullName, role }: NavbarProps) {
 
             {/* Quick Navigation Pills */}
             <div className="hidden md:flex items-center gap-1 bg-surface-100/80 dark:bg-surface-850/90 p-1 rounded-xl border border-surface-200/70 dark:border-surface-800">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                      isActive
-                        ? 'bg-white dark:bg-surface-800 text-brand-600 dark:text-brand-300 shadow-sm border border-surface-200/80 dark:border-surface-700'
-                        : 'text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-100 hover:bg-white/60 dark:hover:bg-surface-800/60'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    {item.label}
-                  </Link>
-                );
-              })}
+              {renderNavLinks(false)}
             </div>
           </div>
 
@@ -108,6 +116,11 @@ export default function Navbar({ fullName, role }: NavbarProps) {
               <LogOut className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        {/* Mobile Navigation Pills */}
+        <div className="flex md:hidden items-center gap-1 pb-2.5 overflow-x-auto">
+          {renderNavLinks(true)}
         </div>
       </div>
     </nav>
